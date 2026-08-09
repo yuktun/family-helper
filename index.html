@@ -207,42 +207,42 @@
 
   <dialog id="todo-dialog" class="app-dialog">
     <form id="todo-form" method="dialog">
-      <div class="dialog-head"><h2 id="todo-dialog-title">新增清單項目</h2><button class="dialog-close" value="cancel" type="submit">×</button></div>
+      <div class="dialog-head"><h2 id="todo-dialog-title">新增清單項目</h2><button class="dialog-close" type="button" data-dialog-cancel aria-label="取消">×</button></div>
       <input type="hidden" id="todo-id" />
       <label>內容<input id="todo-text" maxlength="80" placeholder="例如：買牛奶" required /></label>
       <label>類別<select id="todo-category"><option value="shopping">購物</option><option value="todo">待辦</option></select></label>
-      <div class="dialog-actions"><button class="secondary-button" value="cancel" type="submit">取消</button><button id="save-todo" class="primary-button" value="default" type="button">儲存</button></div>
+      <div class="dialog-actions"><button class="secondary-button" type="button" data-dialog-cancel>取消</button><button id="save-todo" class="primary-button" value="default" type="button">儲存</button></div>
     </form>
   </dialog>
 
   <dialog id="event-dialog" class="app-dialog">
     <form id="event-form" method="dialog">
-      <div class="dialog-head"><h2 id="event-dialog-title">新增家庭行程</h2><button class="dialog-close" value="cancel" type="submit">×</button></div>
+      <div class="dialog-head"><h2 id="event-dialog-title">新增家庭行程</h2><button class="dialog-close" type="button" data-dialog-cancel aria-label="取消">×</button></div>
       <input type="hidden" id="event-id" />
       <label>事項<input id="event-title" maxlength="80" placeholder="例如：家庭晚飯" required /></label>
       <div class="two-col"><label>日期<input id="event-date" type="date" required /></label><label>時間<input id="event-time" type="time" /></label></div>
       <label>類別<select id="event-category"><option value="family">家庭</option><option value="school">學校</option><option value="medical">醫療</option><option value="car">汽車</option><option value="bill">繳費</option><option value="birthday">生日</option><option value="other">其他</option></select></label>
-      <div class="dialog-actions"><button class="secondary-button" value="cancel" type="submit">取消</button><button id="save-event" class="primary-button purple" value="default" type="button">儲存</button></div>
+      <div class="dialog-actions"><button class="secondary-button" type="button" data-dialog-cancel>取消</button><button id="save-event" class="primary-button purple" value="default" type="button">儲存</button></div>
     </form>
   </dialog>
 
   <dialog id="contact-dialog" class="app-dialog">
     <form id="contact-form" method="dialog">
-      <div class="dialog-head"><h2 id="contact-dialog-title">新增實用資料</h2><button class="dialog-close" value="cancel" type="submit">×</button></div>
+      <div class="dialog-head"><h2 id="contact-dialog-title">新增實用資料</h2><button class="dialog-close" type="button" data-dialog-cancel aria-label="取消">×</button></div>
       <input type="hidden" id="contact-id" />
       <label>分類<select id="contact-category"><option value="estate">屋苑</option><option value="medical">醫療</option><option value="company">公司</option><option value="emergency">緊急</option><option value="other">其他</option></select></label>
       <label>名稱<input id="contact-name" maxlength="60" placeholder="例如：管理處" required /></label>
       <label>電話<input id="contact-phone" inputmode="tel" maxlength="30" placeholder="例如：2633 1234" /></label>
       <label>地址（可選）<input id="contact-address" maxlength="120" placeholder="按地址可開啟地圖" /></label>
-      <div class="dialog-actions"><button class="secondary-button" value="cancel" type="submit">取消</button><button id="save-contact" class="primary-button orange" value="default" type="button">儲存</button></div>
+      <div class="dialog-actions"><button class="secondary-button" type="button" data-dialog-cancel>取消</button><button id="save-contact" class="primary-button orange" value="default" type="button">儲存</button></div>
     </form>
   </dialog>
 
   <dialog id="announcement-dialog" class="app-dialog">
     <form method="dialog">
-      <div class="dialog-head"><h2>發佈全家公告</h2><button class="dialog-close" value="cancel" type="submit">×</button></div>
+      <div class="dialog-head"><h2>發佈全家公告</h2><button class="dialog-close" type="button" data-dialog-cancel aria-label="取消">×</button></div>
       <label>公告內容<textarea id="announcement-message" maxlength="280" rows="5" placeholder="例如：今晚八時一起吃飯" required></textarea></label>
-      <div class="dialog-actions"><button class="secondary-button" value="cancel" type="submit">取消</button><button id="save-announcement" class="primary-button" value="default" type="button">發佈</button></div>
+      <div class="dialog-actions"><button class="secondary-button" type="button" data-dialog-cancel>取消</button><button id="save-announcement" class="primary-button" value="default" type="button">發佈</button></div>
     </form>
   </dialog>
 

@@ -119,6 +119,7 @@ function init() {
   bindAuthUI();
   bindMemberUI();
   bindAnnouncementUI();
+  bindDialogCancelUI();
   updateDateAndGreeting();
   renderAll();
   loadWeather();
@@ -171,6 +172,12 @@ function bindAnnouncementUI() {
   document.getElementById('save-announcement').addEventListener('click', publishAnnouncement);
 }
 
+function bindDialogCancelUI() {
+  document.querySelectorAll('[data-dialog-cancel]').forEach((button) => {
+    button.addEventListener('click', () => button.closest('dialog')?.close('cancel'));
+  });
+}
+
 function startAnnouncementListener() {
   announcementUnsub?.();
   announcementUnsub = onSnapshot(announcementsRef, (snap) => {
@@ -213,7 +220,7 @@ async function deleteAnnouncement(id) {
     showToast('公告已刪除');
   } catch (error) {
     console.error('Delete announcement:', error);
-    showToast('未能刪除公告');
+    showToast(error.code === 'permission-denied' ? '未能取消公告：請先發布 Firestore 規則' : '未能取消公告');
   }
 }
 
@@ -221,7 +228,7 @@ function renderAnnouncements() {
   const latest = announcements[0];
   document.querySelectorAll('[data-announcement-slot]').forEach((slot) => {
     slot.hidden = !latest;
-    slot.innerHTML = latest ? `<aside class="announcement-banner" role="status"><span class="announcement-icon">📣</span><div><strong>全家公告</strong><p>${escapeHTML(latest.message)}</p></div>${isAdmin() ? `<button class="delete-announcement" type="button" data-id="${escapeAttr(latest.id)}" aria-label="刪除公告">×</button>` : ''}</aside>` : '';
+    slot.innerHTML = latest ? `<aside class="announcement-banner" role="status"><span class="announcement-icon">📣</span><div><strong>全家公告</strong><p>${escapeHTML(latest.message)}</p></div>${isAdmin() ? `<button class="delete-announcement" type="button" data-id="${escapeAttr(latest.id)}">取消公告</button>` : ''}</aside>` : '';
     slot.querySelector('.delete-announcement')?.addEventListener('click', () => deleteAnnouncement(latest.id));
   });
   document.getElementById('announcement-admin-card').hidden = !isAdmin();
