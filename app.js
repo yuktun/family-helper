@@ -44,6 +44,7 @@ const HKO_CURRENT = 'https://data.weather.gov.hk/weatherAPI/opendata/weather.php
 // Human-readable stop code -> KMB Open Data 16-character stop ID.
 // These are deliberately fixed so the app does not guess a direction or platform.
 const ROUTES = [
+  { route: '980X', dest: '菲林明道', stopCode: 'MA952', stopId: '15FF958BE6921BAA', bound: 'O', serviceType: '1', jointCitybus: true, citybusStopId: '001950', citybusBound: 'O', citybusDestTc: '灣仔', citybusDestEn: 'WAN CHAI' },
   { route: '681', dest: '中環（香港站）', stopCode: 'MA954', stopId: 'BA6D9F93E62B8075', bound: 'O', serviceType: '1', jointCitybus: true, citybusStopId: '001950', citybusBound: 'I', citybusDestTc: '中環', citybusDestEn: 'CENTRAL' },
   { route: '680', dest: '金鐘', stopCode: 'MA952', stopId: '15FF958BE6921BAA', bound: 'O', serviceType: '1', jointCitybus: true, citybusStopId: '001950', citybusBound: 'I', citybusDestTc: '金鐘', citybusDestEn: 'ADMIRALTY' },
   { route: '87D', dest: '紅磡站', stopCode: 'MA303', stopId: '013F884CBCB1CBE4', bound: 'O', serviceType: '1' },
