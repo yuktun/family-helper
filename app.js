@@ -54,7 +54,7 @@ const ROUTES = [
 const CATEGORY_META = {
   estate: { label: '屋苑', icon: 'building', cls: 'estate' },
   medical: { label: '醫療', icon: 'heart', cls: 'medical' },
-  school: { label: '學校', icon: 'school', cls: 'school' },
+  company: { label: '公司', icon: 'briefcase', cls: 'company' },
   emergency: { label: '緊急', icon: 'alert', cls: 'emergency' },
   other: { label: '其他', icon: 'info', cls: 'other' },
 };
@@ -93,6 +93,7 @@ let member = null;
 let pendingRequest = null;
 let sharedUnsubs = [];
 let memberUnsubs = [];
+let adminPanelError = '';
 let currentPage = 'home';
 let todoFilter = 'all';
 const now = new Date();
@@ -133,7 +134,7 @@ function init() {
   window.addEventListener('offline', () => { networkOnline = false; renderConnectionState(); });
   onAuthStateChanged(auth, handleAuthState, (error) => { console.error('Auth state:', error); showToast('登入狀態讀取失敗'); });
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
-    navigator.serviceWorker.register('./sw.js').catch(() => {});
+    navigator.serviceWorker.register('./sw.js').then((registration) => registration.update()).catch(() => {});
   }
 }
 
@@ -367,13 +368,18 @@ function cloudListenerError(error) {
 
 async function ensureDefaultInfo() {
   const snapshot = await getDocs(infoRef);
-  if (!snapshot.empty) return;
   const batch = writeBatch(db);
+  const legacyCompany = snapshot.docs.find((item) => item.id === 'school' && item.data().name === '學校' && item.data().category === 'school');
+  if (legacyCompany) batch.update(legacyCompany.ref, { category: 'company', name: '公司', updatedAt: serverTimestamp() });
+  if (!snapshot.empty) {
+    if (legacyCompany) await batch.commit();
+    return;
+  }
   const defaults = [
     ['management-office', { category: 'estate', name: '管理處', phone: '', address: '', note: '', sortOrder: 10 }],
     ['security-office', { category: 'estate', name: '保安室', phone: '', address: '', note: '', sortOrder: 20 }],
     ['family-doctor', { category: 'medical', name: '家庭醫生', phone: '', address: '', note: '', sortOrder: 30 }],
-    ['school', { category: 'school', name: '學校', phone: '', address: '', note: '', sortOrder: 40 }],
+    ['company', { category: 'company', name: '公司', phone: '', address: '', note: '', sortOrder: 40 }],
     ['emergency-999', { category: 'emergency', name: '999', phone: '999', address: '', note: '緊急熱線', sortOrder: 50 }],
   ];
   defaults.forEach(([id, data]) => batch.set(doc(infoRef, id), { ...data, createdAt: serverTimestamp(), updatedAt: serverTimestamp() }));
@@ -642,9 +648,9 @@ function renderContacts() {
     holder.innerHTML = lockedHTML(authUser ? '等待管理員批准' : '登入後與家人共享實用資料');
     return;
   }
-  const order = ['estate','medical','school','emergency','other'];
+  const order = ['estate','medical','company','emergency','other'];
   const sections = order.map((category) => {
-    const items = state.contacts.filter((c) => c.category === category);
+    const items = state.contacts.filter((c) => contactCategory(c.category) === category);
     if (!items.length) return '';
     const meta = CATEGORY_META[category] || CATEGORY_META.other;
     return `<article class="card contact-card"><div class="contact-title ${meta.cls}"><svg><use href="#i-${meta.icon}"></use></svg>${meta.label}</div>${items.map(contactRowHTML).join('')}</article>`;
@@ -672,11 +678,15 @@ function contactRowHTML(item) {
   return `<div class="contact-row" data-id="${escapeAttr(item.id)}"><div><strong>${escapeHTML(item.name)}</strong><small>${phoneLine}</small>${addressLine}${noteLine}</div><div class="contact-actions">${map}${call}<button class="mini-icon-button edit-contact" type="button" aria-label="修改"><svg><use href="#i-edit"></use></svg></button>${deletable ? '<button class="mini-icon-button danger delete-contact" type="button" aria-label="刪除"><svg><use href="#i-trash"></use></svg></button>' : ''}</div></div>`;
 }
 
+function contactCategory(category) {
+  return category === 'school' ? 'company' : category;
+}
+
 function openContactDialog(item = null) {
   if (!guardPrivateAction()) return;
   document.getElementById('contact-dialog-title').textContent = item ? '修改實用資料' : '新增實用資料';
   document.getElementById('contact-id').value = item?.id || '';
-  document.getElementById('contact-category').value = item?.category || 'estate';
+  document.getElementById('contact-category').value = contactCategory(item?.category || 'estate');
   document.getElementById('contact-name').value = item?.name || '';
   document.getElementById('contact-phone').value = item?.phone || '';
   document.getElementById('contact-address').value = item?.address || '';
@@ -738,10 +748,14 @@ function listenAdminMembers() {
     if (!list) return;
     const pendingHTML = pending.map((u) => `<div class="member-row"><div><strong>${escapeHTML(u.displayName || u.email || '新成員')}</strong><small>${escapeHTML(u.email || '')} · 等待批准</small></div><div class="member-actions"><button data-member-action="approve" data-uid="${escapeAttr(u.uid)}" class="small-button">批准</button><button data-member-action="reject" data-uid="${escapeAttr(u.uid)}" class="small-button danger-outline">拒絕</button></div></div>`).join('');
     const approvedHTML = approved.map((u) => `<div class="member-row"><div><strong>${escapeHTML(u.displayName || u.email || '家庭成員')}</strong><small>${escapeHTML(u.email || '')} · ${u.role === 'admin' ? '管理員' : '成員'}</small></div>${u.uid !== authUser.uid ? `<button data-member-action="remove" data-uid="${escapeAttr(u.uid)}" class="small-button danger-outline">移除</button>` : ''}</div>`).join('');
-    list.innerHTML = `${pendingHTML ? `<h3>等待批准</h3>${pendingHTML}` : ''}<h3>已批准成員</h3>${approvedHTML || '<p class="muted">暫未有其他成員</p>'}`;
+    list.innerHTML = adminPanelError
+      ? `<div class="member-status"><strong>未能讀取等待批准的申請</strong><span>${escapeHTML(adminPanelError)}</span></div>`
+      : `${pendingHTML ? `<h3>等待批准</h3>${pendingHTML}` : ''}<h3>已批准成員</h3>${approvedHTML || '<p class="muted">暫未有其他成員</p>'}`;
   };
-  adminPanelUnsubs.push(onSnapshot(requestsRef, (snap) => { pending = snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((x) => x.status === 'pending'); render(); }));
-  adminPanelUnsubs.push(onSnapshot(membersRef, (snap) => { approved = snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((x) => x.status === 'approved'); render(); }));
+  adminPanelError = '';
+  const listenerError = (error) => { adminPanelError = error.code === 'permission-denied' ? '請在 Firebase Console 發布 firestore.rules，然後重新整理。' : '請重新整理後再試。'; console.error('Admin member panel:', error); render(); };
+  adminPanelUnsubs.push(onSnapshot(requestsRef, (snap) => { pending = snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((x) => x.status === 'pending'); render(); }, listenerError));
+  adminPanelUnsubs.push(onSnapshot(membersRef, (snap) => { approved = snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((x) => x.status === 'approved'); render(); }, listenerError));
 }
 
 async function approveMember(uid) {

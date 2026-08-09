@@ -27,7 +27,7 @@
     <symbol id="i-phone" viewBox="0 0 24 24"><path d="M7 3 4.5 5.5c-1 1 1.7 6.2 5 9.5 3.3 3.3 8.5 6 9.5 5l2.5-2.5-4-4-2.5 2c-2.4-1.2-4.3-3.1-5.5-5.5l2-2.5Z"/></symbol>
     <symbol id="i-building" viewBox="0 0 24 24"><path d="M4 21V8l8-4v17M12 9h8v12M7 11h2M7 15h2M7 19h2M15 12h2M15 16h2M15 20h2"/></symbol>
     <symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 19 10c0 5.5-7 10-7 10Z"/><path d="M12 9v5M9.5 11.5h5"/></symbol>
-    <symbol id="i-school" viewBox="0 0 24 24"><path d="m3 9 9-5 9 5-9 5-9-5Z"/><path d="M6 11.5V16c3 2 9 2 12 0v-4.5M21 10v6"/></symbol>
+    <symbol id="i-briefcase" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="3"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 12h18M10 12v2h4v-2"/></symbol>
     <symbol id="i-alert" viewBox="0 0 24 24"><path d="M5 17h14M8 17V9a4 4 0 0 1 8 0v8M12 3V1M4.5 5 3 3.5M19.5 5 21 3.5"/><path d="M4 21h16"/></symbol>
     <symbol id="i-edit" viewBox="0 0 24 24"><path d="m4 20 4.5-1 10-10-3.5-3.5-10 10L4 20Z"/><path d="m13.5 7 3.5 3.5"/></symbol>
     <symbol id="i-trash" viewBox="0 0 24 24"><path d="M5 7h14M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"/></symbol>
@@ -48,7 +48,7 @@
           <h1>Fu Fai Home</h1>
           <p class="subtitle">家庭助手</p>
         </div>
-        <div class="family-badge" aria-label="家庭">👨‍👩‍👧‍👦</div>
+        <div class="family-badge" aria-label="Fu Fai Home"><svg><use href="#i-home"></use></svg><span>♥</span></div>
       </header>
 
       <div class="announcement-slot" data-announcement-slot></div>
@@ -230,7 +230,7 @@
     <form id="contact-form" method="dialog">
       <div class="dialog-head"><h2 id="contact-dialog-title">新增實用資料</h2><button class="dialog-close" value="cancel" type="submit">×</button></div>
       <input type="hidden" id="contact-id" />
-      <label>分類<select id="contact-category"><option value="estate">屋苑</option><option value="medical">醫療</option><option value="school">學校</option><option value="emergency">緊急</option><option value="other">其他</option></select></label>
+      <label>分類<select id="contact-category"><option value="estate">屋苑</option><option value="medical">醫療</option><option value="company">公司</option><option value="emergency">緊急</option><option value="other">其他</option></select></label>
       <label>名稱<input id="contact-name" maxlength="60" placeholder="例如：管理處" required /></label>
       <label>電話<input id="contact-phone" inputmode="tel" maxlength="30" placeholder="例如：2633 1234" /></label>
       <label>地址（可選）<input id="contact-address" maxlength="120" placeholder="按地址可開啟地圖" /></label>
