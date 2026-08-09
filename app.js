@@ -154,7 +154,8 @@ function switchPage(page) {
   document.querySelectorAll('.nav-item').forEach((b) => b.classList.toggle('active', b.dataset.nav === page));
   window.scrollTo({ top: 0, behavior: 'smooth' });
   if (page === 'calendar') renderCalendar();
-  if (page === 'info') { renderContacts(); renderMemberPanel(); }
+  if (page === 'info') renderContacts();
+  if (page === 'settings') { renderAuthState(); renderMemberPanel(); renderAnnouncements(); }
   if (page === 'todos') renderTodos();
 }
 
@@ -170,6 +171,10 @@ function bindAnnouncementUI() {
     setTimeout(() => document.getElementById('announcement-message').focus(), 50);
   });
   document.getElementById('save-announcement').addEventListener('click', publishAnnouncement);
+  document.getElementById('delete-announcement').addEventListener('click', () => {
+    const latest = announcements[0];
+    if (latest) deleteAnnouncement(latest.id);
+  });
 }
 
 function bindDialogCancelUI() {
@@ -228,10 +233,12 @@ function renderAnnouncements() {
   const latest = announcements[0];
   document.querySelectorAll('[data-announcement-slot]').forEach((slot) => {
     slot.hidden = !latest;
-    slot.innerHTML = latest ? `<aside class="announcement-banner" role="status"><span class="announcement-icon">📣</span><div><strong>全家公告</strong><p>${escapeHTML(latest.message)}</p></div>${isAdmin() ? `<button class="delete-announcement" type="button" data-id="${escapeAttr(latest.id)}">取消公告</button>` : ''}</aside>` : '';
-    slot.querySelector('.delete-announcement')?.addEventListener('click', () => deleteAnnouncement(latest.id));
+    slot.innerHTML = latest ? `<aside class="announcement-banner" role="status"><span class="announcement-icon">📣</span><div><strong>全家公告</strong><p>${escapeHTML(latest.message)}</p></div></aside>` : '';
   });
   document.getElementById('announcement-admin-card').hidden = !isAdmin();
+  const cancelCard = document.getElementById('announcement-cancel-card');
+  cancelCard.hidden = !isAdmin() || !latest;
+  document.getElementById('announcement-current-message').textContent = latest?.message || '';
   const adminStatus = document.getElementById('announcement-admin-status');
   if (adminStatus) adminStatus.textContent = announcementAccessError
     ? '公告目前被 Firestore 規則封鎖。請在 Firebase Console 發布 firestore.rules。'

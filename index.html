@@ -38,6 +38,7 @@
     <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 16V4M8 8l4-4 4 4M5 14v6h14v-6"/></symbol>
     <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v12M8 12l4 4 4-4M5 20h14"/></symbol>
     <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M3 20c0-4 2.5-6 6-6s6 2 6 6M14 15c3-.5 6 1 7 4"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.12 2.12-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1 1.56v.08h-3v-.08a1.7 1.7 0 0 0-1-1.56 1.7 1.7 0 0 0-1.88.34l-.06.06-2.12-2.12.06-.06A1.7 1.7 0 0 0 7.08 15a1.7 1.7 0 0 0-1.56-1H5.4v-3h.12a1.7 1.7 0 0 0 1.56-1 1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.12-2.12.06.06A1.7 1.7 0 0 0 10.74 6a1.7 1.7 0 0 0 1-1.56V4.3h3v.14a1.7 1.7 0 0 0 1 1.56 1.7 1.7 0 0 0 1.88-.34l.06-.06L19.8 7.72l-.06.06A1.7 1.7 0 0 0 19.4 9.66a1.7 1.7 0 0 0 1.56 1h.14v3h-.14a1.7 1.7 0 0 0-1.56 1.34Z"/></symbol>
   </svg>
 
   <main class="app-shell">
@@ -100,21 +101,6 @@
         </button>
       </div>
 
-      <article id="announcement-admin-card" class="card announcement-admin-card" hidden>
-        <div>
-          <strong>全家公告</strong>
-          <small id="announcement-admin-status">所有訪客即使未登入也能看到最新公告。</small>
-        </div>
-        <button id="add-announcement" class="primary-button" type="button">發佈公告</button>
-      </article>
-
-      <div id="connection-badge" class="connection-badge" hidden></div>
-      <article id="auth-card" class="card auth-card">
-        <div id="auth-avatar" class="auth-avatar">☁️</div>
-        <div class="auth-copy"><strong id="auth-title">登入家庭雲端</strong><small id="auth-note">登入後可與家人同步清單、日曆及實用資料。</small></div>
-        <button id="google-login" class="small-button auth-button" type="button">Google 登入</button>
-        <button id="logout-button" class="small-button secondary-auth" type="button" hidden>登出</button>
-      </article>
     </section>
 
     <section id="page-todos" class="page" data-page="todos">
@@ -175,6 +161,41 @@
       </header>
       <div class="announcement-slot" data-announcement-slot></div>
       <div id="contact-groups" class="contact-groups"></div>
+    </section>
+
+    <section id="page-settings" class="page" data-page="settings">
+      <header class="page-header blue">
+        <div>
+          <p class="eyebrow">帳戶及家庭管理</p>
+          <h1>設定</h1>
+        </div>
+        <span class="settings-header-icon"><svg><use href="#i-settings"></use></svg></span>
+      </header>
+      <div class="announcement-slot" data-announcement-slot></div>
+
+      <article id="announcement-admin-card" class="card announcement-admin-card" hidden>
+        <div>
+          <strong>全家公告</strong>
+          <small id="announcement-admin-status">所有訪客即使未登入也能看到最新公告。</small>
+        </div>
+        <button id="add-announcement" class="primary-button" type="button">發佈公告</button>
+      </article>
+
+      <article id="announcement-cancel-card" class="card announcement-cancel-card" hidden>
+        <div>
+          <strong>目前公告</strong>
+          <small id="announcement-current-message"></small>
+        </div>
+        <button id="delete-announcement" class="secondary-button danger-outline" type="button">取消公告</button>
+      </article>
+
+      <div id="connection-badge" class="connection-badge" hidden></div>
+      <article id="auth-card" class="card auth-card">
+        <div id="auth-avatar" class="auth-avatar">☁️</div>
+        <div class="auth-copy"><strong id="auth-title">登入家庭雲端</strong><small id="auth-note">登入後可與家人同步清單、日曆及實用資料。</small></div>
+        <button id="google-login" class="small-button auth-button" type="button">Google 登入</button>
+        <button id="logout-button" class="small-button secondary-auth" type="button" hidden>登出</button>
+      </article>
 
       <article id="family-members-card" class="card members-card" hidden>
         <div class="card-heading compact">
@@ -202,6 +223,7 @@
       <button class="nav-item" type="button" data-nav="todos"><svg><use href="#i-check"></use></svg><span>清單</span></button>
       <button class="nav-item" type="button" data-nav="calendar"><svg><use href="#i-calendar"></use></svg><span>日曆</span></button>
       <button class="nav-item" type="button" data-nav="info"><svg><use href="#i-info"></use></svg><span>資料</span></button>
+      <button class="nav-item" type="button" data-nav="settings"><svg><use href="#i-settings"></use></svg><span>設定</span></button>
     </nav>
   </main>
 
