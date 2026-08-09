@@ -1,6 +1,6 @@
 {
-  "name": "我家｜家庭助手",
-  "short_name": "我家",
+  "name": "Fu Fai Home｜家庭助手",
+  "short_name": "Fu Fai Home",
   "description": "家庭日常助手：巴士到站、家庭清單、日曆及實用資料。",
   "start_url": "./",
   "scope": "./",

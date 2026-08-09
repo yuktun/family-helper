@@ -1,4 +1,4 @@
-# 我家｜家庭助手 V2
+# Fu Fai Home｜家庭助手 V2
 
 家庭日常 Mini App，針對手機及 GitHub Pages。介面使用繁體中文，首頁提供香港巴士 ETA / 天氣；家庭清單、日曆及實用資料改用 Firebase Authentication + Cloud Firestore 全家同步。
 

@@ -86,6 +86,8 @@ const announcementsRef = collection(familyRef, 'announcements');
 
 let state = { todos: [], events: [], contacts: [] };
 let announcements = [];
+let announcementAccessError = false;
+let announcementUnsub = null;
 let authUser = null;
 let member = null;
 let pendingRequest = null;
@@ -169,13 +171,16 @@ function bindAnnouncementUI() {
 }
 
 function startAnnouncementListener() {
-  onSnapshot(announcementsRef, (snap) => {
+  announcementUnsub?.();
+  announcementUnsub = onSnapshot(announcementsRef, (snap) => {
+    announcementAccessError = false;
     announcements = snap.docs
       .map((d) => ({ id: d.id, ...d.data() }))
       .sort((a, b) => (b.createdAtMs || b.createdAt?.seconds || 0) - (a.createdAtMs || a.createdAt?.seconds || 0));
     renderAnnouncements();
   }, (error) => {
-    console.warn('Public announcement listener:', error);
+    announcementAccessError = error.code === 'permission-denied';
+    console.warn('Announcement listener unavailable. Publish firestore.rules to enable public announcements.', error.code);
     announcements = [];
     renderAnnouncements();
   });
@@ -196,7 +201,7 @@ async function publishAnnouncement() {
     showToast('公告已發佈');
   } catch (error) {
     console.error('Publish announcement:', error);
-    showToast('未能發佈公告');
+    showToast(error.code === 'permission-denied' ? '未能發佈公告：請先發布 Firestore 規則' : '未能發佈公告');
   }
 }
 
@@ -219,6 +224,10 @@ function renderAnnouncements() {
     slot.querySelector('.delete-announcement')?.addEventListener('click', () => deleteAnnouncement(latest.id));
   });
   document.getElementById('announcement-admin-card').hidden = !isAdmin();
+  const adminStatus = document.getElementById('announcement-admin-status');
+  if (adminStatus) adminStatus.textContent = announcementAccessError
+    ? '公告目前被 Firestore 規則封鎖。請在 Firebase Console 發布 firestore.rules。'
+    : '所有訪客即使未登入也能看到最新公告。';
 }
 
 function bindAuthUI() {
