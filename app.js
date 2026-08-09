@@ -82,8 +82,10 @@ const eventsRef = collection(familyRef, 'calendarEvents');
 const infoRef = collection(familyRef, 'usefulInfo');
 const membersRef = collection(familyRef, 'members');
 const requestsRef = collection(familyRef, 'membershipRequests');
+const announcementsRef = collection(familyRef, 'announcements');
 
 let state = { todos: [], events: [], contacts: [] };
+let announcements = [];
 let authUser = null;
 let member = null;
 let pendingRequest = null;
@@ -113,10 +115,12 @@ function init() {
   bindHomeUI();
   bindAuthUI();
   bindMemberUI();
+  bindAnnouncementUI();
   updateDateAndGreeting();
   renderAll();
   loadWeather();
   loadBusETA();
+  startAnnouncementListener();
   busTimer = window.setInterval(() => {
     if (!document.hidden) loadBusETA({ quiet: true });
   }, 60_000);
@@ -152,6 +156,69 @@ function switchPage(page) {
 
 function bindHomeUI() {
   document.getElementById('refresh-bus').addEventListener('click', () => loadBusETA());
+}
+
+function bindAnnouncementUI() {
+  document.getElementById('add-announcement').addEventListener('click', () => {
+    if (!isAdmin()) return showToast('只有家庭管理員可以發佈公告');
+    document.getElementById('announcement-message').value = '';
+    document.getElementById('announcement-dialog').showModal();
+    setTimeout(() => document.getElementById('announcement-message').focus(), 50);
+  });
+  document.getElementById('save-announcement').addEventListener('click', publishAnnouncement);
+}
+
+function startAnnouncementListener() {
+  onSnapshot(announcementsRef, (snap) => {
+    announcements = snap.docs
+      .map((d) => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => (b.createdAtMs || b.createdAt?.seconds || 0) - (a.createdAtMs || a.createdAt?.seconds || 0));
+    renderAnnouncements();
+  }, (error) => {
+    console.warn('Public announcement listener:', error);
+    announcements = [];
+    renderAnnouncements();
+  });
+}
+
+async function publishAnnouncement() {
+  if (!isAdmin()) return showToast('只有家庭管理員可以發佈公告');
+  const message = document.getElementById('announcement-message').value.trim();
+  if (!message) return showToast('請輸入公告內容');
+  try {
+    await addDoc(announcementsRef, {
+      message,
+      createdBy: authUser.uid,
+      createdAt: serverTimestamp(),
+      createdAtMs: Date.now(),
+    });
+    document.getElementById('announcement-dialog').close();
+    showToast('公告已發佈');
+  } catch (error) {
+    console.error('Publish announcement:', error);
+    showToast('未能發佈公告');
+  }
+}
+
+async function deleteAnnouncement(id) {
+  if (!isAdmin() || !window.confirm('刪除這則公告？')) return;
+  try {
+    await deleteDoc(doc(announcementsRef, id));
+    showToast('公告已刪除');
+  } catch (error) {
+    console.error('Delete announcement:', error);
+    showToast('未能刪除公告');
+  }
+}
+
+function renderAnnouncements() {
+  const latest = announcements[0];
+  document.querySelectorAll('[data-announcement-slot]').forEach((slot) => {
+    slot.hidden = !latest;
+    slot.innerHTML = latest ? `<aside class="announcement-banner" role="status"><span class="announcement-icon">📣</span><div><strong>全家公告</strong><p>${escapeHTML(latest.message)}</p></div>${isAdmin() ? `<button class="delete-announcement" type="button" data-id="${escapeAttr(latest.id)}" aria-label="刪除公告">×</button>` : ''}</aside>` : '';
+    slot.querySelector('.delete-announcement')?.addEventListener('click', () => deleteAnnouncement(latest.id));
+  });
+  document.getElementById('announcement-admin-card').hidden = !isAdmin();
 }
 
 function bindAuthUI() {
@@ -719,7 +786,7 @@ function bindBackupUI() {
 }
 
 function renderAll() {
-  renderTodos(); renderCalendar(); renderContacts(); renderHomeSummary(); renderAuthState(); renderMemberPanel(); renderConnectionState();
+  renderTodos(); renderCalendar(); renderContacts(); renderHomeSummary(); renderAuthState(); renderMemberPanel(); renderConnectionState(); renderAnnouncements();
 }
 
 function renderHomeSummary() {

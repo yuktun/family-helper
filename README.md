@@ -10,6 +10,7 @@
 - 管理員可在「資料 → 家庭成員」批准、拒絕或移除成員
 - 家庭清單、日曆、實用資料改為 Firestore 即時同步
 - Firestore Web 離線快取（支援情況視瀏覽器而定）
+- 全家公告置頂顯示；未登入訪客亦可閱讀，只有管理員可發佈或刪除
 - 偵測 V1 LocalStorage 舊資料並提供一次性匯入
 - 巴士改用指定站碼，不再自動猜測方向/站位
 - 新增 89P
@@ -45,6 +46,7 @@ Web Firebase config 會出現在 frontend source，這是 Firebase Web App 正�
 families/home/
   members/{uid}
   membershipRequests/{uid}
+  announcements/{announcementId}
   todos/{todoId}
   calendarEvents/{eventId}
   usefulInfo/{infoId}
@@ -72,7 +74,7 @@ firebase deploy --only firestore:rules
 
 `.firebaserc` 已指向 `family-helpers`，`firebase.json` 已指向 `firestore.rules`。
 
-> 首次測試前必須部署 rules；若 Firebase Console 仍維持 `allow read, write: if false;`，Google 登入可以成功，但 App 無法建立 admin/member 資料或讀寫家庭內容。
+> 首次測試前必須部署 rules；若未部署本 repo 的最新規則，Google 登入／家庭資料及未登入公告讀取都可能無法運作。
 
 ## Firebase Authentication
 
@@ -145,3 +147,4 @@ Repository 不能加入：
 6. 第二個帳戶立即取得共享資料
 7. 681 / 680 / 87D / 89D / 89P 顯示指定站碼 ETA
 8. GitHub Pages / PWA 加入主畫面
+9. 管理員發佈公告後，登出或使用無痕視窗仍可在四個主頁頂部看到公告，管理員亦可刪除

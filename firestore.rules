@@ -50,6 +50,18 @@ service cloud.firestore {
         allow update: if isAdmin(familyId);
       }
 
+      match /announcements/{announcementId} {
+        // Announcements are intentionally public so visitors can read them
+        // before signing in. Only an approved family admin may publish/delete.
+        allow read: if true;
+        allow create: if isAdmin(familyId)
+          && request.resource.data.message is string
+          && request.resource.data.message.size() > 0
+          && request.resource.data.message.size() <= 280;
+        allow update: if false;
+        allow delete: if isAdmin(familyId);
+      }
+
       match /todos/{itemId} {
         allow read, create, update, delete: if isApproved(familyId);
       }

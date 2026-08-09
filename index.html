@@ -51,6 +51,8 @@
         <div class="family-badge" aria-label="家庭">👨‍👩‍👧‍👦</div>
       </header>
 
+      <div class="announcement-slot" data-announcement-slot></div>
+
       <div class="greeting-card card">
         <div class="greeting-icon" id="greeting-icon">☀️</div>
         <div>
@@ -58,14 +60,6 @@
           <p>一齊搞掂今日大小事 😊</p>
         </div>
       </div>
-
-      <article id="auth-card" class="card auth-card">
-        <div id="auth-avatar" class="auth-avatar">☁️</div>
-        <div class="auth-copy"><strong id="auth-title">登入家庭雲端</strong><small id="auth-note">登入後可與家人同步清單、日曆及實用資料。</small></div>
-        <button id="google-login" class="small-button auth-button" type="button">Google 登入</button>
-        <button id="logout-button" class="small-button secondary-auth" type="button" hidden>登出</button>
-      </article>
-      <div id="connection-badge" class="connection-badge" hidden></div>
 
       <article class="card bus-card">
         <div class="card-heading">
@@ -105,6 +99,22 @@
           <small id="home-next-event">今日未有活動</small>
         </button>
       </div>
+
+      <article id="announcement-admin-card" class="card announcement-admin-card" hidden>
+        <div>
+          <strong>全家公告</strong>
+          <small>所有訪客即使未登入也能看到最新公告。</small>
+        </div>
+        <button id="add-announcement" class="primary-button" type="button">發佈公告</button>
+      </article>
+
+      <div id="connection-badge" class="connection-badge" hidden></div>
+      <article id="auth-card" class="card auth-card">
+        <div id="auth-avatar" class="auth-avatar">☁️</div>
+        <div class="auth-copy"><strong id="auth-title">登入家庭雲端</strong><small id="auth-note">登入後可與家人同步清單、日曆及實用資料。</small></div>
+        <button id="google-login" class="small-button auth-button" type="button">Google 登入</button>
+        <button id="logout-button" class="small-button secondary-auth" type="button" hidden>登出</button>
+      </article>
     </section>
 
     <section id="page-todos" class="page" data-page="todos">
@@ -115,6 +125,7 @@
         </div>
         <button id="add-todo-top" class="header-action" type="button"><svg><use href="#i-plus"></use></svg><span>新增</span></button>
       </header>
+      <div class="announcement-slot" data-announcement-slot></div>
       <div class="filter-row" role="tablist" aria-label="清單分類">
         <button class="filter-chip active" data-filter="all" type="button">全部</button>
         <button class="filter-chip" data-filter="shopping" type="button"><svg><use href="#i-cart"></use></svg>購物</button>
@@ -132,6 +143,7 @@
         </div>
         <button id="add-event-top" class="header-action purple" type="button"><svg><use href="#i-plus"></use></svg><span>新增</span></button>
       </header>
+      <div class="announcement-slot" data-announcement-slot></div>
       <article class="calendar-panel card">
         <div class="month-nav">
           <button id="prev-month" class="icon-button" type="button" aria-label="上個月"><svg><use href="#i-chevron-left"></use></svg></button>
@@ -161,6 +173,7 @@
         </div>
         <button id="add-contact-top" class="header-action orange" type="button"><svg><use href="#i-plus"></use></svg><span>新增</span></button>
       </header>
+      <div class="announcement-slot" data-announcement-slot></div>
       <div id="contact-groups" class="contact-groups"></div>
 
       <article id="family-members-card" class="card members-card" hidden>
@@ -222,6 +235,14 @@
       <label>電話<input id="contact-phone" inputmode="tel" maxlength="30" placeholder="例如：2633 1234" /></label>
       <label>地址（可選）<input id="contact-address" maxlength="120" placeholder="按地址可開啟地圖" /></label>
       <div class="dialog-actions"><button class="secondary-button" value="cancel" type="submit">取消</button><button id="save-contact" class="primary-button orange" value="default" type="button">儲存</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="announcement-dialog" class="app-dialog">
+    <form method="dialog">
+      <div class="dialog-head"><h2>發佈全家公告</h2><button class="dialog-close" value="cancel" type="submit">×</button></div>
+      <label>公告內容<textarea id="announcement-message" maxlength="280" rows="5" placeholder="例如：今晚八時一起吃飯" required></textarea></label>
+      <div class="dialog-actions"><button class="secondary-button" value="cancel" type="submit">取消</button><button id="save-announcement" class="primary-button" value="default" type="button">發佈</button></div>
     </form>
   </dialog>
 
