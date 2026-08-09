@@ -44,8 +44,8 @@ const HKO_CURRENT = 'https://data.weather.gov.hk/weatherAPI/opendata/weather.php
 // Human-readable stop code -> KMB Open Data 16-character stop ID.
 // These are deliberately fixed so the app does not guess a direction or platform.
 const ROUTES = [
-  { route: '681', dest: '中環（香港站）', stopCode: 'MA954', stopId: 'BA6D9F93E62B8075', bound: 'O', serviceType: '1', jointCitybus: true, citybusSeq: 1 },
-  { route: '680', dest: '金鐘', stopCode: 'MA952', stopId: '15FF958BE6921BAA', bound: 'O', serviceType: '1', jointCitybus: true, citybusSeq: 4 },
+  { route: '681', dest: '中環（香港站）', stopCode: 'MA954', stopId: 'BA6D9F93E62B8075', bound: 'O', serviceType: '1', jointCitybus: true, citybusStopId: '001950', citybusBound: 'I', citybusDestTc: '中環', citybusDestEn: 'CENTRAL' },
+  { route: '680', dest: '金鐘', stopCode: 'MA952', stopId: '15FF958BE6921BAA', bound: 'O', serviceType: '1', jointCitybus: true, citybusStopId: '001950', citybusBound: 'I', citybusDestTc: '金鐘', citybusDestEn: 'ADMIRALTY' },
   { route: '87D', dest: '紅磡站', stopCode: 'MA303', stopId: '013F884CBCB1CBE4', bound: 'O', serviceType: '1' },
   { route: '89D', dest: '藍田站', stopCode: 'MA310', stopId: '76E8D8C73E0B8096', bound: 'O', serviceType: '1' },
   { route: '89P', dest: '藍田站', stopCode: 'MA310', stopId: '76E8D8C73E0B8096', bound: 'O', serviceType: '1' },
@@ -774,34 +774,54 @@ async function loadBusETA({ quiet = false } = {}) {
 }
 
 async function loadOneRoute(config) {
+  const [kmbResult, citybusResult] = await Promise.all([
+    loadKmbEtas(config),
+    config.jointCitybus ? loadCitybusEtas(config) : Promise.resolve({ etas: [], failed: false }),
+  ]);
+  const etas = dedupeEtas([...kmbResult.etas, ...citybusResult.etas]).sort((a,b) => a.etaDate - b.etaDate).slice(0,3);
+  return { ...config, etas, error: kmbResult.failed && citybusResult.failed };
+}
+
+async function loadKmbEtas(config) {
   try {
     const etaResp = await fetchWithTimeout(`${KMB_BASE}/eta/${encodeURIComponent(config.stopId)}/${encodeURIComponent(config.route)}/${encodeURIComponent(config.serviceType)}`, 9000);
     if (!etaResp.ok) throw new Error(`ETA HTTP ${etaResp.status}`);
     const etaData = (await etaResp.json()).data || [];
-    const kmbEtas = etaData.filter((x) => x.eta && (!x.dir || x.dir === config.bound)).map((x) => ({ ...x, source: 'KMB', etaDate: new Date(x.eta) })).filter(validFutureEta);
-    const citybusEtas = config.jointCitybus ? await loadCitybusEtas(config) : [];
-    const etas = dedupeEtas([...kmbEtas, ...citybusEtas]).sort((a,b) => a.etaDate - b.etaDate).slice(0,3);
-    return { ...config, etas };
+    const etas = etaData.filter((x) => x.eta && (!x.dir || x.dir === config.bound)).map((x) => ({ ...x, source: 'KMB', etaDate: new Date(x.eta) })).filter(validFutureEta);
+    return { etas, failed: false };
   } catch (error) {
-    console.warn(`Bus ${config.route} error`, error);
-    return { ...config, etas: [], error: true };
+    console.warn(`KMB ${config.route} ETA error`, error);
+    return { etas: [], failed: true };
   }
 }
 
 async function loadCitybusEtas(config) {
   try {
-    const rsResp = await fetchWithTimeout(`${CTB_BASE}/route-stop/CTB/${encodeURIComponent(config.route)}/outbound`, 8000); if (!rsResp.ok) return [];
-    const routeStops = (await rsResp.json()).data || []; const stopEntry = routeStops.find((x) => Number(x.seq) === Number(config.citybusSeq)); if (!stopEntry?.stop) return [];
-    const etaResp = await fetchWithTimeout(`${CTB_BASE}/eta/CTB/${encodeURIComponent(stopEntry.stop)}/${encodeURIComponent(config.route)}`, 8000); if (!etaResp.ok) return [];
+    const etaResp = await fetchWithTimeout(`${CTB_BASE}/eta/CTB/${encodeURIComponent(config.citybusStopId)}/${encodeURIComponent(config.route)}`, 8000);
+    if (!etaResp.ok) throw new Error(`ETA HTTP ${etaResp.status}`);
     const etaData = (await etaResp.json()).data || [];
-    return etaData.filter((x) => x.eta && (!x.dir || x.dir === 'O')).map((x) => ({ ...x, source: 'CTB', etaDate: new Date(x.eta) })).filter(validFutureEta);
-  } catch { return []; }
+    const etas = etaData
+      .filter((x) => x.eta && matchesCitybusDirection(x, config))
+      .map((x) => ({ ...x, source: 'CTB', etaDate: new Date(x.eta) }))
+      .filter(validFutureEta);
+    return { etas, failed: false };
+  } catch (error) {
+    console.warn(`Citybus ${config.route} ETA error`, error);
+    return { etas: [], failed: true };
+  }
+}
+
+function matchesCitybusDirection(item, config) {
+  if (item.dir && item.dir !== config.citybusBound) return false;
+  const destination = `${item.dest_tc || ''} ${item.dest_en || ''}`.trim().toUpperCase();
+  if (!destination) return true;
+  return destination.includes(config.citybusDestTc) || destination.includes(config.citybusDestEn);
 }
 
 function validFutureEta(item) { return !Number.isNaN(item.etaDate.getTime()) && item.etaDate.getTime() > Date.now() - 90_000; }
-function dedupeEtas(items) { const sorted = items.sort((a,b) => a.etaDate - b.etaDate); const result = []; for (const item of sorted) if (!result.some((x) => Math.abs(x.etaDate - item.etaDate) < 45_000)) result.push(item); return result; }
+function dedupeEtas(items) { const sorted = items.sort((a,b) => a.etaDate - b.etaDate); const result = []; for (const item of sorted) if (!result.some((x) => x.source === item.source && Math.abs(x.etaDate - item.etaDate) < 45_000)) result.push(item); return result; }
 function renderBusSkeleton() { document.getElementById('bus-list').innerHTML = ROUTES.map((r) => `<div class="bus-row"><span class="route-badge">${r.route}</span><div class="route-destination"><strong>${r.dest}</strong><small>站：${r.stopCode}</small></div><span class="eta-none">載入中…</span></div>`).join(''); }
-function renderBusResults(results) { document.getElementById('bus-list').innerHTML = results.map((r) => { const eta = r.error ? '<span class="eta-none">未能更新</span>' : r.etas.length ? `<div class="eta-list">${r.etas.map((x) => `<span class="eta-pill">${formatETA(x.etaDate)}</span>`).join('')}</div>` : '<span class="eta-none">暫無班次</span>'; return `<div class="bus-row"><span class="route-badge">${r.route}</span><div class="route-destination"><strong>${r.dest}</strong><small>${r.jointCitybus ? '九巴＋城巴 · ' : '九巴 · '}站 ${r.stopCode}</small></div>${eta}</div>`; }).join(''); }
+function renderBusResults(results) { document.getElementById('bus-list').innerHTML = results.map((r) => { const eta = r.error ? '<span class="eta-none">未能更新</span>' : r.etas.length ? `<div class="eta-list">${r.etas.map((x) => `<span class="eta-pill"><span class="eta-operator ${x.source === 'CTB' ? 'ctb' : 'kmb'}">${x.source === 'CTB' ? '城巴' : '九巴'}</span>${formatETA(x.etaDate)}</span>`).join('')}</div>` : '<span class="eta-none">暫無班次</span>'; return `<div class="bus-row"><span class="route-badge">${r.route}</span><div class="route-destination"><strong>${r.dest}</strong><small>${r.jointCitybus ? '九巴＋城巴 · ' : '九巴 · '}站 ${r.stopCode}</small></div>${eta}</div>`; }).join(''); }
 function formatETA(date) { const mins = Math.max(0, Math.round((date.getTime() - Date.now()) / 60000)); return mins <= 1 ? '即將到站' : `${mins} 分鐘`; }
 function weatherEmoji(iconNo) { const n = Number(iconNo); if ([50,51].includes(n)) return '☀️'; if ([52,53].includes(n)) return '🌤️'; if ([54,55,56,57,58,59,60,61,62,63,64].includes(n)) return '☁️'; if ([65,66,67,68,69,70,71,72,73,74,75,76,77].includes(n)) return '🌧️'; if ([80,81,82].includes(n)) return '🌫️'; if ([90,91,92,93].includes(n)) return '🌙'; return '🌤️'; }
 
