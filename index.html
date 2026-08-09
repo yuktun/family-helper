@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#f4f7fb" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="我家" />
+  <meta name="description" content="家庭日常助手：巴士到站、家庭清單、日曆及實用資料。" />
+  <title>我家｜家庭助手</title>
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="assets/icon-180.png" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <svg class="svg-sprite" aria-hidden="true">
+    <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10.5V20h13v-9.5"/><path d="M9.5 20v-6h5v6"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="m8 12 2.5 2.5L16 9"/></symbol>
+    <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3.5" y="5.5" width="17" height="15" rx="3"/><path d="M7 3.5v4M17 3.5v4M3.5 9.5h17"/><path d="M8 13h2M14 13h2M8 17h2M14 17h2"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5h.01"/></symbol>
+    <symbol id="i-bus" viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="16" rx="3"/><path d="M7 7h10M7 12h10"/><circle cx="8" cy="16" r="1"/><circle cx="16" cy="16" r="1"/><path d="M7 19v2M17 19v2"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 6v5h-5"/><path d="M18.5 15.5A7.5 7.5 0 1 1 19 8"/></symbol>
+    <symbol id="i-cart" viewBox="0 0 24 24"><path d="M3 5h2l2 10h10l2-7H6"/><circle cx="9" cy="19" r="1.5"/><circle cx="17" cy="19" r="1.5"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-phone" viewBox="0 0 24 24"><path d="M7 3 4.5 5.5c-1 1 1.7 6.2 5 9.5 3.3 3.3 8.5 6 9.5 5l2.5-2.5-4-4-2.5 2c-2.4-1.2-4.3-3.1-5.5-5.5l2-2.5Z"/></symbol>
+    <symbol id="i-building" viewBox="0 0 24 24"><path d="M4 21V8l8-4v17M12 9h8v12M7 11h2M7 15h2M7 19h2M15 12h2M15 16h2M15 20h2"/></symbol>
+    <symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 19 10c0 5.5-7 10-7 10Z"/><path d="M12 9v5M9.5 11.5h5"/></symbol>
+    <symbol id="i-school" viewBox="0 0 24 24"><path d="m3 9 9-5 9 5-9 5-9-5Z"/><path d="M6 11.5V16c3 2 9 2 12 0v-4.5M21 10v6"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><path d="M5 17h14M8 17V9a4 4 0 0 1 8 0v8M12 3V1M4.5 5 3 3.5M19.5 5 21 3.5"/><path d="M4 21h16"/></symbol>
+    <symbol id="i-edit" viewBox="0 0 24 24"><path d="m4 20 4.5-1 10-10-3.5-3.5-10 10L4 20Z"/><path d="m13.5 7 3.5 3.5"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M5 7h14M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"/></symbol>
+    <symbol id="i-chevron-left" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+    <symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+    <symbol id="i-map" viewBox="0 0 24 24"><path d="m4 6 5-2 6 2 5-2v14l-5 2-6-2-5 2V6Z"/><path d="M9 4v14M15 6v14"/></symbol>
+    <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 16V4M8 8l4-4 4 4M5 14v6h14v-6"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v12M8 12l4 4 4-4M5 20h14"/></symbol>
+  </svg>
+
+  <main class="app-shell">
+    <section id="page-home" class="page active" data-page="home">
+      <header class="hero hero-home">
+        <div>
+          <p id="home-date" class="eyebrow"></p>
+          <h1>我家</h1>
+          <p class="subtitle">家庭助手</p>
+        </div>
+        <div class="family-badge" aria-label="家庭">👨‍👩‍👧‍👦</div>
+      </header>
+
+      <div class="greeting-card card">
+        <div class="greeting-icon" id="greeting-icon">☀️</div>
+        <div>
+          <strong id="greeting-title">早晨！</strong>
+          <p>一齊搞掂今日大小事 😊</p>
+        </div>
+      </div>
+
+      <article class="card bus-card">
+        <div class="card-heading">
+          <div class="heading-with-icon">
+            <span class="round-icon red"><svg><use href="#i-bus"></use></svg></span>
+            <div>
+              <h2>巴士到站</h2>
+              <p>馬鞍山市中心（MOSTown）往市區</p>
+            </div>
+          </div>
+          <button id="refresh-bus" class="icon-button" type="button" aria-label="更新巴士到站時間"><svg><use href="#i-refresh"></use></svg></button>
+        </div>
+        <div id="bus-list" class="bus-list" aria-live="polite"></div>
+        <div class="bus-footer">
+          <span id="bus-updated">正在載入九巴資料…</span>
+          <span id="bus-status-dot" class="status-dot loading"></span>
+        </div>
+      </article>
+
+      <div class="summary-grid">
+        <button class="summary-card weather-card" type="button" data-go="home" aria-label="今天天氣">
+          <span class="summary-icon" id="weather-icon">🌤️</span>
+          <span class="summary-label">今天天氣</span>
+          <strong id="weather-temp">--°C</strong>
+          <small id="weather-note">香港天文台</small>
+        </button>
+        <button class="summary-card todo-card" type="button" data-go="todos">
+          <span class="summary-icon green"><svg><use href="#i-check"></use></svg></span>
+          <span class="summary-label">家庭清單</span>
+          <strong><span id="home-todo-count">0</span> 項</strong>
+          <small id="home-todo-note">全部完成</small>
+        </button>
+        <button class="summary-card calendar-card" type="button" data-go="calendar">
+          <span class="summary-icon purple"><svg><use href="#i-calendar"></use></svg></span>
+          <span class="summary-label">今日行程</span>
+          <strong><span id="home-event-count">0</span> 項</strong>
+          <small id="home-next-event">今日未有活動</small>
+        </button>
+      </div>
+    </section>
+
+    <section id="page-todos" class="page" data-page="todos">
+      <header class="page-header mint">
+        <div>
+          <p class="eyebrow">一家人共享的清單</p>
+          <h1>家庭清單</h1>
+        </div>
+        <button id="add-todo-top" class="header-action" type="button"><svg><use href="#i-plus"></use></svg><span>新增</span></button>
+      </header>
+      <div class="filter-row" role="tablist" aria-label="清單分類">
+        <button class="filter-chip active" data-filter="all" type="button">全部</button>
+        <button class="filter-chip" data-filter="shopping" type="button"><svg><use href="#i-cart"></use></svg>購物</button>
+        <button class="filter-chip" data-filter="todo" type="button"><svg><use href="#i-check"></use></svg>待辦</button>
+      </div>
+      <div id="todo-list" class="stack-list"></div>
+      <button id="add-todo-fab" class="fab" type="button" aria-label="新增項目"><svg><use href="#i-plus"></use></svg></button>
+    </section>
+
+    <section id="page-calendar" class="page" data-page="calendar">
+      <header class="page-header lavender">
+        <div>
+          <p class="eyebrow">家庭大小事</p>
+          <h1>日曆</h1>
+        </div>
+        <button id="add-event-top" class="header-action purple" type="button"><svg><use href="#i-plus"></use></svg><span>新增</span></button>
+      </header>
+      <article class="calendar-panel card">
+        <div class="month-nav">
+          <button id="prev-month" class="icon-button" type="button" aria-label="上個月"><svg><use href="#i-chevron-left"></use></svg></button>
+          <h2 id="month-title"></h2>
+          <button id="next-month" class="icon-button" type="button" aria-label="下個月"><svg><use href="#i-chevron-right"></use></svg></button>
+        </div>
+        <div class="weekdays"><span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span></div>
+        <div id="calendar-grid" class="calendar-grid"></div>
+      </article>
+      <article class="day-events card">
+        <div class="section-heading-row">
+          <div>
+            <p class="eyebrow purple-text">已選日期</p>
+            <h2 id="selected-date-title"></h2>
+          </div>
+          <button id="add-event-inline" class="small-button purple" type="button"><svg><use href="#i-plus"></use></svg>新增</button>
+        </div>
+        <div id="event-list" class="event-list"></div>
+      </article>
+    </section>
+
+    <section id="page-info" class="page" data-page="info">
+      <header class="page-header warm">
+        <div>
+          <p class="eyebrow">一按即用的家庭資料</p>
+          <h1>實用資料</h1>
+        </div>
+        <button id="add-contact-top" class="header-action orange" type="button"><svg><use href="#i-plus"></use></svg><span>新增</span></button>
+      </header>
+      <div id="contact-groups" class="contact-groups"></div>
+
+      <article class="card backup-card">
+        <div class="card-heading compact">
+          <div>
+            <h2>資料備份</h2>
+            <p>清單、日曆及聯絡資料只儲存在這部裝置。</p>
+          </div>
+        </div>
+        <div class="backup-actions">
+          <button id="export-data" class="secondary-button" type="button"><svg><use href="#i-download"></use></svg>匯出備份</button>
+          <label class="secondary-button file-button"><svg><use href="#i-upload"></use></svg>匯入備份<input id="import-data" type="file" accept="application/json" hidden /></label>
+        </div>
+      </article>
+    </section>
+
+    <nav class="bottom-nav" aria-label="主要選單">
+      <button class="nav-item active" type="button" data-nav="home"><svg><use href="#i-home"></use></svg><span>首頁</span></button>
+      <button class="nav-item" type="button" data-nav="todos"><svg><use href="#i-check"></use></svg><span>清單</span></button>
+      <button class="nav-item" type="button" data-nav="calendar"><svg><use href="#i-calendar"></use></svg><span>日曆</span></button>
+      <button class="nav-item" type="button" data-nav="info"><svg><use href="#i-info"></use></svg><span>資料</span></button>
+    </nav>
+  </main>
+
+  <dialog id="todo-dialog" class="app-dialog">
+    <form id="todo-form" method="dialog">
+      <div class="dialog-head"><h2 id="todo-dialog-title">新增清單項目</h2><button class="dialog-close" value="cancel" type="submit">×</button></div>
+      <input type="hidden" id="todo-id" />
+      <label>內容<input id="todo-text" maxlength="80" placeholder="例如：買牛奶" required /></label>
+      <label>類別<select id="todo-category"><option value="shopping">購物</option><option value="todo">待辦</option></select></label>
+      <div class="dialog-actions"><button class="secondary-button" value="cancel" type="submit">取消</button><button id="save-todo" class="primary-button" value="default" type="button">儲存</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="event-dialog" class="app-dialog">
+    <form id="event-form" method="dialog">
+      <div class="dialog-head"><h2 id="event-dialog-title">新增家庭行程</h2><button class="dialog-close" value="cancel" type="submit">×</button></div>
+      <input type="hidden" id="event-id" />
+      <label>事項<input id="event-title" maxlength="80" placeholder="例如：家庭晚飯" required /></label>
+      <div class="two-col"><label>日期<input id="event-date" type="date" required /></label><label>時間<input id="event-time" type="time" /></label></div>
+      <label>類別<select id="event-category"><option value="family">家庭</option><option value="school">學校</option><option value="medical">醫療</option><option value="car">汽車</option><option value="bill">繳費</option><option value="birthday">生日</option><option value="other">其他</option></select></label>
+      <div class="dialog-actions"><button class="secondary-button" value="cancel" type="submit">取消</button><button id="save-event" class="primary-button purple" value="default" type="button">儲存</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="contact-dialog" class="app-dialog">
+    <form id="contact-form" method="dialog">
+      <div class="dialog-head"><h2 id="contact-dialog-title">新增實用資料</h2><button class="dialog-close" value="cancel" type="submit">×</button></div>
+      <input type="hidden" id="contact-id" />
+      <label>分類<select id="contact-category"><option value="estate">屋苑</option><option value="medical">醫療</option><option value="school">學校</option><option value="emergency">緊急</option><option value="other">其他</option></select></label>
+      <label>名稱<input id="contact-name" maxlength="60" placeholder="例如：管理處" required /></label>
+      <label>電話<input id="contact-phone" inputmode="tel" maxlength="30" placeholder="例如：2633 1234" /></label>
+      <label>地址（可選）<input id="contact-address" maxlength="120" placeholder="按地址可開啟地圖" /></label>
+      <div class="dialog-actions"><button class="secondary-button" value="cancel" type="submit">取消</button><button id="save-contact" class="primary-button orange" value="default" type="button">儲存</button></div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="app.js" defer></script>
+</body>
+</html>
