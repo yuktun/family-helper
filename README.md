@@ -1,111 +1,147 @@
-# 我家｜家庭助手
+# 我家｜家庭助手 V2
 
-一個可以直接放到 GitHub Pages 的純前端家庭 Mini App。全繁體中文，設計以手機使用為主。
+家庭日常 Mini App，針對手機及 GitHub Pages。介面使用繁體中文，首頁提供香港巴士 ETA / 天氣；家庭清單、日曆及實用資料改用 Firebase Authentication + Cloud Firestore 全家同步。
+
+## V2 主要更新
+
+- Google 登入及家庭成員批准流程
+- 初始管理員：`jatoy0a11@gmail.com`
+- 其他 Google 帳戶首次登入會顯示「等待管理員批准」
+- 管理員可在「資料 → 家庭成員」批准、拒絕或移除成員
+- 家庭清單、日曆、實用資料改為 Firestore 即時同步
+- Firestore Web 離線快取（支援情況視瀏覽器而定）
+- 偵測 V1 LocalStorage 舊資料並提供一次性匯入
+- 巴士改用指定站碼，不再自動猜測方向/站位
+- 新增 89P
+
+## 指定巴士站
+
+| 路線 | 方向 | 站碼 | KMB Open Data stop_id |
+|---|---|---|---|
+| 681 | 中環（香港站） | MA954 | BA6D9F93E62B8075 |
+| 680 | 金鐘 | MA952 | 15FF958BE6921BAA |
+| 87D | 紅磡站 | MA303 | 013F884CBCB1CBE4 |
+| 89D | 藍田站 | MA310 | 76E8D8C73E0B8096 |
+| 89P | 藍田站 | MA310 | 76E8D8C73E0B8096 |
+
+681 / 680 會在可行時再合併城巴聯營 ETA；任何一個來源失敗都不應令整個首頁失效。
+
+## Firebase
+
+Firebase project: `family-helpers`
+
+使用：
+
+- Firebase Authentication（Google）
+- Cloud Firestore
+
+不使用 Realtime Database、Admin SDK、service account 或任何私人金鑰。
+
+Web Firebase config 會出現在 frontend source，這是 Firebase Web App 正常運作所需；真正的資料保護由 Authentication + `firestore.rules` 負責。
+
+### Firestore structure
+
+```text
+families/home/
+  members/{uid}
+  membershipRequests/{uid}
+  todos/{todoId}
+  calendarEvents/{eventId}
+  usefulInfo/{infoId}
+```
+
+### 初始管理員
+
+`jatoy0a11@gmail.com` 第一次登入時，App 會建立自己的 approved admin member document。Firestore rules 只容許這個指定 Google 帳戶完成 bootstrap；其他帳戶不能自行提升為 admin。
+
+### Firestore Rules
+
+本 repo 包含 `firestore.rules`。
+
+Firebase Console：
+
+1. Firestore → Rules
+2. 將 `firestore.rules` 內容貼入
+3. Publish
+
+或安裝 Firebase CLI 後：
+
+```bash
+firebase deploy --only firestore:rules
+```
+
+`.firebaserc` 已指向 `family-helpers`，`firebase.json` 已指向 `firestore.rules`。
+
+> 首次測試前必須部署 rules；若 Firebase Console 仍維持 `allow read, write: if false;`，Google 登入可以成功，但 App 無法建立 admin/member 資料或讀寫家庭內容。
+
+## Firebase Authentication
+
+Firebase Console 已需要：
+
+- Authentication → Google：Enabled
+- Authorized domains 包含：`yuktun.github.io`
+
+## GitHub Pages
+
+獨立 repo `family-helper`，檔案放 repo root。
+
+Settings → Pages → Deploy from a branch → `main` → `/(root)`
+
+預期網址：
+
+```text
+https://yuktun.github.io/family-helper/
+```
+
+所有本地資源使用相對路徑；service worker / manifest scope 亦以 repo 子路徑運作。
 
 ## 本機執行
 
-本專案不需要建置工具或私密 API 金鑰。由專案根目錄啟動任何靜態網站伺服器，例如：
+不要直接 `file://` 開啟，請使用靜態 server：
 
 ```bash
 python -m http.server 8000
 ```
 
-然後開啟 `http://localhost:8000/`。Service worker、PWA 安裝及部分瀏覽器功能需要透過 HTTP/HTTPS 使用，不建議直接以 `file://` 開啟。
+然後開：`http://localhost:8000/`
 
-## 已完成功能
+如要測試 Google Authentication，localhost 一般可作 Firebase Auth 開發來源；實際部署請以 GitHub Pages 測試完整流程。
 
-- **首頁**
-  - 681 / 680 / 89D / 87D，由馬鞍山市中心（MOSTown）往市區方向的實時 ETA
-  - 680 / 681 會嘗試合併九巴＋城巴聯營班次；即使城巴資料暫時失敗，九巴 ETA 仍可顯示
-  - 每 60 秒自動更新，亦可手動刷新
-  - 香港天文台即時氣溫／濕度
-  - 家庭清單及今日行程摘要
-- **家庭清單**
-  - 購物 / 待辦分類
-  - 新增、修改、完成、刪除
-  - LocalStorage 保存
-- **日曆**
-  - 月曆
-  - 日期事件提示點
-  - 新增、修改、刪除家庭行程
-  - 家庭 / 學校 / 醫療 / 汽車 / 繳費 / 生日 / 其他分類
-- **實用資料**
-  - 屋苑 / 醫療 / 學校 / 緊急 / 其他
-  - 電話一按撥打
-  - 地址一按開地圖
-  - 新增、修改、刪除
-  - 預設保留 999
-- **備份**
-  - 匯出 JSON 備份
-  - 匯入 JSON 備份
-- **PWA**
-  - manifest、service worker、app icon
-  - iPhone / Android 可加入主畫面
+## V1 LocalStorage migration
 
-## 使用的公開 API
+管理員第一次成功登入並取得 Firestore 權限後，如果瀏覽器內找到 `family-helper-v1` 的有意義資料，App 會詢問：
 
-### 九巴／龍運 ETA
+> 發現舊有本機資料，是否匯入家庭雲端？
 
-官方公開資料：Transport Department / KMB & LWB
+只有確認後才會加入 Firestore，並以 LocalStorage 記錄已完成 migration，避免重複匯入。
 
-- Route List: `https://data.etabus.gov.hk/v1/transport/kmb/route/`
-- Route-Stop: `https://data.etabus.gov.hk/v1/transport/kmb/route-stop/{route}/{direction}/{service_type}`
-- ETA: `https://data.etabus.gov.hk/v1/transport/kmb/eta/{stop_id}/{route}/{service_type}`
+## 公開 API
 
-App 不硬寫 KMB 的 opaque stop ID。它會先從 Route List 判斷目的地方向，再由 Route-Stop 取得 MOSTown 對應 stop ID，最後查 ETA。
+- KMB/LWB ETA: `https://data.etabus.gov.hk/v1/transport/kmb/eta/{stop_id}/{route}/{service_type}`
+- Citybus joint-route supplement: `https://rt.data.gov.hk/v1/transport/citybus-nwfb/`
+- 香港天文台 Current Weather API
 
-目前設定：
+上述資料不需要私人 API key。
 
-| 路線 | 目的地 | MOSTown 對應站序 |
-|---|---|---:|
-| 681 | 中環（香港站） | 1 |
-| 680 | 金鐘 | 4 |
-| 89D | 藍田站 | 6 |
-| 87D | 紅磡站 | 4 |
+## 私隱
 
-> 如果九巴日後永久更改路線站序，可在 `app.js` 最上方 `ROUTES` 修改 `preferredSeq`。
+不要把真實家庭電話、地址、學校或其他私人資料硬寫入 GitHub source。這些資料應由已批准家庭成員登入後輸入 Firestore。
 
-### 城巴（680 / 681 聯營補充）
+Repository 不能加入：
 
-- Route-Stop: `https://rt.data.gov.hk/v1/transport/citybus-nwfb/route-stop/CTB/{route}/outbound`
-- ETA: `https://rt.data.gov.hk/v1/transport/citybus-nwfb/eta/CTB/{stop_id}/{route}`
+- Firebase service-account JSON
+- Admin SDK private key
+- 私人 token / secret
 
-App 會合併城巴與九巴 ETA，並以約 45 秒的時間差做簡單去重。
+## 重要測試
 
-### 香港天文台
+部署後建議依次測試：
 
-- Current Weather: `https://data.weather.gov.hk/weatherAPI/opendata/weather.php?dataType=rhrread&lang=tc`
-- 目前優先顯示「沙田」測站氣溫，沒有時使用 API 返回的其他測站。
-
-## GitHub Pages 部署
-
-本專案是獨立的 `family-helper` repository，所有網站檔案均放在 repository 根目錄：
-
-```text
-family-helper/
-  index.html
-  styles.css
-  app.js
-  sw.js
-  manifest.webmanifest
-  assets/
-```
-
-在 GitHub repository 的 **Settings → Pages**，選擇 **Deploy from a branch**，再選擇預設分支及 **/(root)**。網站網址為：
-
-```text
-https://<github-username>.github.io/family-helper/
-```
-
-所有 CSS、JavaScript、manifest、service worker 及圖示均使用相對路徑，可在 GitHub Pages 的 `/family-helper/` 子路徑正常運作。
-
-## 私隱與資料儲存
-
-清單、日曆和實用聯絡資料只會儲存在目前瀏覽器的 LocalStorage。專案不會把這些資料上載到伺服器，亦不包含分析、追蹤或廣告程式。請使用「匯出備份」保存資料，並只在信任的裝置匯入備份檔案。
-
-## 注意
-
-1. V1 的家庭清單、日曆及實用資料是 **每部裝置獨立** 的 LocalStorage，未有多人同步。
-2. 如果下一版要全家手機同步，建議再接 Firebase / Supabase，並設定安全規則；不要把 private API key / service account secret 放在 public GitHub repo。
-3. 公開交通及天氣 API 需要網絡；離線時 App 本身仍可開啟，LocalStorage 功能仍可用，但實時資料不會更新。
-4. `design-reference.png` 是本次確認過的 UI 概念圖，方便日後交給 Codex 繼續微調。
+1. Firestore rules 已 Publish
+2. `jatoy0a11@gmail.com` Google 登入 → 顯示「家庭管理員」
+3. 新增清單 / 日曆 / 實用資料 → reload 後仍存在
+4. 第二個 Google 帳戶登入 → 顯示「等待管理員批准」
+5. 管理員在「資料 → 家庭成員」批准
+6. 第二個帳戶立即取得共享資料
+7. 681 / 680 / 87D / 89D / 89P 顯示指定站碼 ETA
+8. GitHub Pages / PWA 加入主畫面

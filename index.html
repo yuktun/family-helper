@@ -37,6 +37,7 @@
     <symbol id="i-map" viewBox="0 0 24 24"><path d="m4 6 5-2 6 2 5-2v14l-5 2-6-2-5 2V6Z"/><path d="M9 4v14M15 6v14"/></symbol>
     <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 16V4M8 8l4-4 4 4M5 14v6h14v-6"/></symbol>
     <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v12M8 12l4 4 4-4M5 20h14"/></symbol>
+    <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M3 20c0-4 2.5-6 6-6s6 2 6 6M14 15c3-.5 6 1 7 4"/></symbol>
   </svg>
 
   <main class="app-shell">
@@ -58,13 +59,21 @@
         </div>
       </div>
 
+      <article id="auth-card" class="card auth-card">
+        <div id="auth-avatar" class="auth-avatar">☁️</div>
+        <div class="auth-copy"><strong id="auth-title">登入家庭雲端</strong><small id="auth-note">登入後可與家人同步清單、日曆及實用資料。</small></div>
+        <button id="google-login" class="small-button auth-button" type="button">Google 登入</button>
+        <button id="logout-button" class="small-button secondary-auth" type="button" hidden>登出</button>
+      </article>
+      <div id="connection-badge" class="connection-badge" hidden></div>
+
       <article class="card bus-card">
         <div class="card-heading">
           <div class="heading-with-icon">
             <span class="round-icon red"><svg><use href="#i-bus"></use></svg></span>
             <div>
               <h2>巴士到站</h2>
-              <p>馬鞍山市中心（MOSTown）往市區</p>
+              <p>馬鞍山指定車站往市區</p>
             </div>
           </div>
           <button id="refresh-bus" class="icon-button" type="button" aria-label="更新巴士到站時間"><svg><use href="#i-refresh"></use></svg></button>
@@ -154,11 +163,18 @@
       </header>
       <div id="contact-groups" class="contact-groups"></div>
 
+      <article id="family-members-card" class="card members-card" hidden>
+        <div class="card-heading compact">
+          <div class="heading-with-icon"><span class="round-icon blue"><svg><use href="#i-users"></use></svg></span><div><h2>家庭成員</h2><p>管理家庭雲端存取權限</p></div></div>
+        </div>
+        <div id="member-list" class="member-list"></div>
+      </article>
+
       <article class="card backup-card">
         <div class="card-heading compact">
           <div>
             <h2>資料備份</h2>
-            <p>清單、日曆及聯絡資料只儲存在這部裝置。</p>
+            <p>匯出目前家庭雲端資料作額外備份。</p>
           </div>
         </div>
         <div class="backup-actions">
@@ -210,6 +226,6 @@
   </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="app.js" defer></script>
+  <script type="module" src="app.js"></script>
 </body>
 </html>

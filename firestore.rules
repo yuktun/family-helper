@@ -1,0 +1,66 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function familyMember(familyId) {
+      return get(/databases/$(database)/documents/families/$(familyId)/members/$(request.auth.uid));
+    }
+
+    function isApproved(familyId) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/families/$(familyId)/members/$(request.auth.uid))
+        && familyMember(familyId).data.status == 'approved';
+    }
+
+    function isAdmin(familyId) {
+      return isApproved(familyId)
+        && familyMember(familyId).data.role == 'admin';
+    }
+
+    match /families/{familyId} {
+      allow read, write: if false;
+
+      match /members/{uid} {
+        allow read: if signedIn() && (request.auth.uid == uid || isApproved(familyId));
+
+        // One-time bootstrap: only the designated Google account can create
+        // its own approved admin membership. No other client can self-promote.
+        allow create: if signedIn()
+          && request.auth.uid == uid
+          && request.auth.token.email == 'jatoy0a11@gmail.com'
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.email == request.auth.token.email
+          && request.resource.data.role == 'admin'
+          && request.resource.data.status == 'approved';
+
+        allow create, update, delete: if isAdmin(familyId);
+      }
+
+      match /membershipRequests/{uid} {
+        allow read: if signedIn() && (request.auth.uid == uid || isAdmin(familyId));
+        allow create: if signedIn()
+          && request.auth.uid == uid
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.email == request.auth.token.email
+          && request.resource.data.status == 'pending';
+        allow delete: if isAdmin(familyId) || (signedIn() && request.auth.uid == uid);
+        allow update: if isAdmin(familyId);
+      }
+
+      match /todos/{itemId} {
+        allow read, create, update, delete: if isApproved(familyId);
+      }
+
+      match /calendarEvents/{eventId} {
+        allow read, create, update, delete: if isApproved(familyId);
+      }
+
+      match /usefulInfo/{infoId} {
+        allow read, create, update, delete: if isApproved(familyId);
+      }
+    }
+  }
+}
