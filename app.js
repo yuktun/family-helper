@@ -37,6 +37,7 @@ const ADMIN_EMAIL = 'jatoy0a11@gmail.com';
 const FAMILY_ID = 'home';
 const LEGACY_STORAGE_KEY = 'family-helper-v1';
 const MIGRATION_KEY = 'family-helper-v2-migrated';
+const THEME_PREFERENCE_KEY = 'family-helper-theme-preference';
 const KMB_BASE = 'https://data.etabus.gov.hk/v1/transport/kmb';
 const CTB_BASE = 'https://rt.data.gov.hk/v1/transport/citybus-nwfb';
 const HKO_CURRENT = 'https://data.weather.gov.hk/weatherAPI/opendata/weather.php?dataType=rhrread&lang=tc';
@@ -104,6 +105,8 @@ let selectedDate = toISODate(now);
 let busTimer = null;
 let toastTimer = null;
 let networkOnline = navigator.onLine;
+const systemDarkMode = window.matchMedia('(prefers-color-scheme: dark)');
+let themePreference = readThemePreference();
 
 const privateAllowed = () => Boolean(authUser && member?.status === 'approved');
 const isAdmin = () => privateAllowed() && member?.role === 'admin';
@@ -111,6 +114,7 @@ const isAdmin = () => privateAllowed() && member?.role === 'admin';
 window.addEventListener('DOMContentLoaded', init);
 
 function init() {
+  applyTheme();
   bindNavigation();
   bindTodoUI();
   bindCalendarUI();
@@ -121,6 +125,7 @@ function init() {
   bindMemberUI();
   bindAnnouncementUI();
   bindDialogCancelUI();
+  bindThemeUI();
   updateDateAndGreeting();
   renderAll();
   loadWeather();
@@ -138,6 +143,43 @@ function init() {
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
     navigator.serviceWorker.register('./sw.js').then((registration) => registration.update()).catch(() => {});
   }
+}
+
+function readThemePreference() {
+  const value = localStorage.getItem(THEME_PREFERENCE_KEY);
+  return ['auto', 'light', 'dark'].includes(value) ? value : 'auto';
+}
+
+function bindThemeUI() {
+  document.querySelectorAll('[data-theme-option]').forEach((button) => {
+    button.addEventListener('click', () => {
+      themePreference = button.dataset.themeOption;
+      localStorage.setItem(THEME_PREFERENCE_KEY, themePreference);
+      applyTheme();
+    });
+  });
+  systemDarkMode.addEventListener('change', () => {
+    if (themePreference === 'auto') applyTheme();
+  });
+  renderThemePreference();
+}
+
+function applyTheme() {
+  const effectiveTheme = themePreference === 'auto' ? (systemDarkMode.matches ? 'dark' : 'light') : themePreference;
+  document.documentElement.dataset.theme = effectiveTheme;
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', effectiveTheme === 'dark' ? '#121722' : '#f4f7fb');
+  renderThemePreference();
+}
+
+function renderThemePreference() {
+  const effectiveTheme = document.documentElement.dataset.theme || 'light';
+  document.querySelectorAll('[data-theme-option]').forEach((button) => {
+    const selected = button.dataset.themeOption === themePreference;
+    button.classList.toggle('active', selected);
+    button.setAttribute('aria-pressed', String(selected));
+  });
+  const note = document.getElementById('theme-note');
+  if (note) note.textContent = themePreference === 'auto' ? `跟隨裝置設定（目前：${effectiveTheme === 'dark' ? '夜間' : '日間'}）` : `目前使用${effectiveTheme === 'dark' ? '夜間' : '日間'}模式`;
 }
 
 function bindNavigation() {

@@ -39,6 +39,9 @@
     <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v12M8 12l4 4 4-4M5 20h14"/></symbol>
     <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M3 20c0-4 2.5-6 6-6s6 2 6 6M14 15c3-.5 6 1 7 4"/></symbol>
     <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.12 2.12-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1 1.56v.08h-3v-.08a1.7 1.7 0 0 0-1-1.56 1.7 1.7 0 0 0-1.88.34l-.06.06-2.12-2.12.06-.06A1.7 1.7 0 0 0 7.08 15a1.7 1.7 0 0 0-1.56-1H5.4v-3h.12a1.7 1.7 0 0 0 1.56-1 1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.12-2.12.06.06A1.7 1.7 0 0 0 10.74 6a1.7 1.7 0 0 0 1-1.56V4.3h3v.14a1.7 1.7 0 0 0 1 1.56 1.7 1.7 0 0 0 1.88-.34l.06-.06L19.8 7.72l-.06.06A1.7 1.7 0 0 0 19.4 9.66a1.7 1.7 0 0 0 1.56 1h.14v3h-.14a1.7 1.7 0 0 0-1.56 1.34Z"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.65 17.65l1.42 1.42M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.65 6.35l1.42-1.42"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20.5 15.2A8.7 8.7 0 0 1 8.8 3.5 8.7 8.7 0 1 0 20.5 15.2Z"/></symbol>
+    <symbol id="i-auto" viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="3"/><path d="M12 6v12M12 6a6 6 0 0 0 0 12"/></symbol>
   </svg>
 
   <main class="app-shell">
@@ -172,6 +175,15 @@
         <span class="settings-header-icon"><svg><use href="#i-settings"></use></svg></span>
       </header>
       <div class="announcement-slot" data-announcement-slot></div>
+
+      <article class="card appearance-card">
+        <div class="card-heading compact"><div><h2>外觀</h2><p id="theme-note">跟隨裝置設定</p></div></div>
+        <div class="theme-choice" role="group" aria-label="選擇顯示模式">
+          <button type="button" data-theme-option="auto"><svg><use href="#i-auto"></use></svg><span>自動</span></button>
+          <button type="button" data-theme-option="light"><svg><use href="#i-sun"></use></svg><span>日間</span></button>
+          <button type="button" data-theme-option="dark"><svg><use href="#i-moon"></use></svg><span>夜間</span></button>
+        </div>
+      </article>
 
       <article id="announcement-admin-card" class="card announcement-admin-card" hidden>
         <div>
