@@ -105,7 +105,7 @@ let selectedDate = toISODate(now);
 let busTimer = null;
 let toastTimer = null;
 let networkOnline = navigator.onLine;
-const systemDarkMode = window.matchMedia('(prefers-color-scheme: dark)');
+const systemDarkMode = typeof window.matchMedia === 'function' ? window.matchMedia('(prefers-color-scheme: dark)') : { matches: false };
 let themePreference = readThemePreference();
 
 const privateAllowed = () => Boolean(authUser && member?.status === 'approved');
@@ -146,27 +146,35 @@ function init() {
 }
 
 function readThemePreference() {
-  const value = localStorage.getItem(THEME_PREFERENCE_KEY);
-  return ['auto', 'light', 'dark'].includes(value) ? value : 'auto';
+  try {
+    const value = localStorage.getItem(THEME_PREFERENCE_KEY);
+    return ['auto', 'light', 'dark'].includes(value) ? value : 'auto';
+  } catch {
+    return 'auto';
+  }
 }
 
 function bindThemeUI() {
   document.querySelectorAll('[data-theme-option]').forEach((button) => {
     button.addEventListener('click', () => {
       themePreference = button.dataset.themeOption;
-      localStorage.setItem(THEME_PREFERENCE_KEY, themePreference);
+      try { localStorage.setItem(THEME_PREFERENCE_KEY, themePreference); } catch {}
       applyTheme();
     });
   });
-  systemDarkMode.addEventListener('change', () => {
+  const onSystemThemeChange = () => {
     if (themePreference === 'auto') applyTheme();
-  });
+  };
+  if (systemDarkMode.addEventListener) systemDarkMode.addEventListener('change', onSystemThemeChange);
+  else if (systemDarkMode.addListener) systemDarkMode.addListener(onSystemThemeChange);
   renderThemePreference();
 }
 
 function applyTheme() {
   const effectiveTheme = themePreference === 'auto' ? (systemDarkMode.matches ? 'dark' : 'light') : themePreference;
   document.documentElement.dataset.theme = effectiveTheme;
+  document.documentElement.style.colorScheme = effectiveTheme;
+  document.body?.setAttribute('data-theme', effectiveTheme);
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', effectiveTheme === 'dark' ? '#121722' : '#f4f7fb');
   renderThemePreference();
 }
