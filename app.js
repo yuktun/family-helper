@@ -38,13 +38,14 @@ const FAMILY_ID = 'home';
 const LEGACY_STORAGE_KEY = 'family-helper-v1';
 const MIGRATION_KEY = 'family-helper-v2-migrated';
 const THEME_PREFERENCE_KEY = 'family-helper-theme-preference';
+const DASHBOARD_PREFERENCE_KEY = 'family-helper-dashboard-preference';
 const KMB_BASE = 'https://data.etabus.gov.hk/v1/transport/kmb';
 const CTB_BASE = 'https://rt.data.gov.hk/v1/transport/citybus-nwfb';
 const HKO_CURRENT = 'https://data.weather.gov.hk/weatherAPI/opendata/weather.php?dataType=rhrread&lang=tc';
 
 // Human-readable stop code -> KMB Open Data 16-character stop ID.
 // These are deliberately fixed so the app does not guess a direction or platform.
-const ROUTES = [
+const DEFAULT_ROUTES = [
   { route: '980X', dest: '菲林明道', stopCode: 'MA952', stopId: '15FF958BE6921BAA', bound: 'O', serviceType: '1', jointCitybus: true, citybusStopId: '001950', citybusBound: 'O', citybusDestTc: '灣仔', citybusDestEn: 'WAN CHAI' },
   { route: '681', dest: '中環（香港站）', stopCode: 'MA954', stopId: 'BA6D9F93E62B8075', bound: 'I', serviceType: '1', jointCitybus: true, citybusStopId: '001950', citybusBound: 'I', citybusDestTc: '中環', citybusDestEn: 'CENTRAL' },
   { route: '680', dest: '金鐘', stopCode: 'MA952', stopId: '15FF958BE6921BAA', bound: 'O', serviceType: '1', jointCitybus: true, citybusStopId: '001950', citybusBound: 'I', citybusDestTc: '金鐘', citybusDestEn: 'ADMIRALTY' },
@@ -52,6 +53,8 @@ const ROUTES = [
   { route: '89D', dest: '藍田站', stopCode: 'MA310', stopId: '76E8D8C73E0B8096', bound: 'O', serviceType: '1' },
   { route: '89P', dest: '藍田站', stopCode: 'MA310', stopId: '76E8D8C73E0B8096', bound: 'O', serviceType: '1' },
 ];
+let dashboardPreferences = readDashboardPreferences();
+const activeRoutes = () => DEFAULT_ROUTES.filter((route) => dashboardPreferences.routes.includes(route.route));
 
 const CATEGORY_META = {
   estate: { label: '屋苑', icon: 'building', cls: 'estate' },
@@ -85,8 +88,10 @@ const infoRef = collection(familyRef, 'usefulInfo');
 const membersRef = collection(familyRef, 'members');
 const requestsRef = collection(familyRef, 'membershipRequests');
 const announcementsRef = collection(familyRef, 'announcements');
+const notesRef = collection(familyRef, 'notes');
+const remindersRef = collection(familyRef, 'reminders');
 
-let state = { todos: [], events: [], contacts: [] };
+let state = { todos: [], events: [], contacts: [], notes: [], reminders: [] };
 let announcements = [];
 let announcementAccessError = false;
 let announcementUnsub = null;
@@ -98,6 +103,8 @@ let memberUnsubs = [];
 let adminPanelError = '';
 let currentPage = 'home';
 let todoFilter = 'all';
+let contactQuery = '';
+let clockTimer = null;
 const now = new Date();
 let viewYear = now.getFullYear();
 let viewMonth = now.getMonth();
@@ -126,7 +133,12 @@ function init() {
   bindAnnouncementUI();
   bindDialogCancelUI();
   bindThemeUI();
+  bindDashboardSettings();
+  bindNotesUI();
+  bindRemindersUI();
+  bindConfirmUI();
   updateDateAndGreeting();
+  clockTimer = window.setInterval(updateDateAndGreeting, 30_000);
   renderAll();
   loadWeather();
   loadBusETA();
@@ -152,6 +164,24 @@ function readThemePreference() {
   } catch {
     return 'auto';
   }
+}
+
+function readDashboardPreferences() {
+  const defaults = { modules: { reminders: true, notes: true }, routes: DEFAULT_ROUTES.map((route) => route.route) };
+  try {
+    const saved = JSON.parse(localStorage.getItem(DASHBOARD_PREFERENCE_KEY) || 'null');
+    return {
+      modules: { ...defaults.modules, ...(saved?.modules || {}) },
+      routes: Array.isArray(saved?.routes) && saved.routes.length ? saved.routes.filter((route) => defaults.routes.includes(route)) : defaults.routes,
+    };
+  } catch { return defaults; }
+}
+
+function saveDashboardPreferences() {
+  try { localStorage.setItem(DASHBOARD_PREFERENCE_KEY, JSON.stringify(dashboardPreferences)); } catch {}
+  renderDashboardSettings();
+  renderHomeSummary();
+  loadBusETA();
 }
 
 function bindThemeUI() {
@@ -192,6 +222,7 @@ function renderThemePreference() {
 
 function bindNavigation() {
   document.querySelectorAll('[data-nav]').forEach((button) => {
+    button.setAttribute('aria-current', button.dataset.nav === currentPage ? 'page' : 'false');
     button.addEventListener('click', () => switchPage(button.dataset.nav));
   });
   document.querySelectorAll('[data-go]').forEach((button) => {
@@ -203,6 +234,7 @@ function switchPage(page) {
   currentPage = page;
   document.querySelectorAll('.page').forEach((p) => p.classList.toggle('active', p.dataset.page === page));
   document.querySelectorAll('.nav-item').forEach((b) => b.classList.toggle('active', b.dataset.nav === page));
+  document.querySelectorAll('.nav-item').forEach((b) => b.setAttribute('aria-current', b.dataset.nav === page ? 'page' : 'false'));
   window.scrollTo({ top: 0, behavior: 'smooth' });
   if (page === 'calendar') renderCalendar();
   if (page === 'info') renderContacts();
@@ -212,6 +244,36 @@ function switchPage(page) {
 
 function bindHomeUI() {
   document.getElementById('refresh-bus').addEventListener('click', () => loadBusETA());
+  document.querySelectorAll('[data-quick-action]').forEach((button) => button.addEventListener('click', () => {
+    const action = button.dataset.quickAction;
+    if (action === 'todo') openTodoDialog();
+    if (action === 'event') openEventDialog();
+    if (action === 'contact') switchPage('info');
+    if (action === 'note') openNoteDialog();
+    if (action === 'reminder') openReminderDialog();
+  }));
+}
+
+function bindDashboardSettings() {
+  document.querySelectorAll('[data-module-toggle]').forEach((input) => input.addEventListener('change', () => {
+    dashboardPreferences.modules[input.dataset.moduleToggle] = input.checked;
+    saveDashboardPreferences();
+  }));
+  document.getElementById('route-settings').addEventListener('change', (event) => {
+    const input = event.target.closest('[data-route-toggle]');
+    if (!input) return;
+    const enabled = [...document.querySelectorAll('[data-route-toggle]:checked')].map((item) => item.value);
+    if (!enabled.length) { input.checked = true; return showToast('最少保留一條巴士路線'); }
+    dashboardPreferences.routes = enabled;
+    saveDashboardPreferences();
+  });
+  renderDashboardSettings();
+}
+
+function renderDashboardSettings() {
+  document.querySelectorAll('[data-home-module]').forEach((module) => { module.hidden = dashboardPreferences.modules[module.dataset.homeModule] === false; });
+  document.querySelectorAll('[data-module-toggle]').forEach((input) => { input.checked = dashboardPreferences.modules[input.dataset.moduleToggle] !== false; });
+  document.getElementById('route-settings').innerHTML = DEFAULT_ROUTES.map((route) => `<label><span><strong>${escapeHTML(route.route)} · ${escapeHTML(route.dest)}</strong><small>站 ${escapeHTML(route.stopCode)}</small></span><input type="checkbox" value="${escapeAttr(route.route)}" data-route-toggle ${dashboardPreferences.routes.includes(route.route) ? 'checked' : ''} /></label>`).join('');
 }
 
 function bindAnnouncementUI() {
@@ -270,7 +332,7 @@ async function publishAnnouncement() {
 }
 
 async function deleteAnnouncement(id) {
-  if (!isAdmin() || !window.confirm('刪除這則公告？')) return;
+  if (!isAdmin() || !await confirmAction('刪除這則公告？', '取消公告')) return;
   try {
     await deleteDoc(doc(announcementsRef, id));
     showToast('公告已刪除');
@@ -315,7 +377,7 @@ async function handleAuthState(user) {
   authUser = user;
   member = null;
   pendingRequest = null;
-  state = { todos: [], events: [], contacts: [] };
+  state = { todos: [], events: [], contacts: [], notes: [], reminders: [] };
 
   if (!user) {
     renderAll();
@@ -362,7 +424,7 @@ async function observeMembership(user) {
       await startSharedListeners();
     } else {
       stopSharedListeners();
-      state = { todos: [], events: [], contacts: [] };
+      state = { todos: [], events: [], contacts: [], notes: [], reminders: [] };
       if ((user.email || '').toLowerCase() !== ADMIN_EMAIL.toLowerCase()) await ensurePendingRequest(user);
     }
     renderAll();
@@ -408,6 +470,14 @@ async function startSharedListeners() {
   sharedUnsubs.push(onSnapshot(infoRef, (snap) => {
     state.contacts = snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a,b) => (a.sortOrder || 999) - (b.sortOrder || 999));
     renderContacts();
+  }, cloudListenerError));
+  sharedUnsubs.push(onSnapshot(notesRef, (snap) => {
+    state.notes = snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort(sortByCreatedDesc);
+    renderHomeSummary();
+  }, cloudListenerError));
+  sharedUnsubs.push(onSnapshot(remindersRef, (snap) => {
+    state.reminders = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    renderHomeSummary();
   }, cloudListenerError));
 
   if (isAdmin()) {
@@ -459,7 +529,7 @@ async function offerLegacyMigration() {
     localStorage.setItem(MIGRATION_KEY, 'done');
     return;
   }
-  const accepted = window.confirm('發現舊有本機資料，是否匯入家庭雲端？');
+  const accepted = await confirmAction('發現舊有本機資料，是否匯入家庭雲端？', '匯入舊資料');
   if (!accepted) return;
   await importLegacy(legacy);
   localStorage.setItem(MIGRATION_KEY, 'done');
@@ -486,6 +556,12 @@ async function importLegacy(data) {
   (data.contacts || []).filter((c) => c.name).forEach((item) => {
     const ref = item.id === 'emergency-999' ? doc(infoRef, 'emergency-999') : doc(infoRef);
     batch.set(ref, { category: item.category || 'other', name: item.name, phone: item.phone || '', address: item.address || '', note: item.note || '', sortOrder: item.sortOrder || 999, createdAt: serverTimestamp(), updatedAt: serverTimestamp() }, { merge: true });
+  });
+  (data.notes || []).filter((item) => item.title).forEach((item) => {
+    batch.set(doc(notesRef), { title: item.title, content: item.content || '', createdBy: authUser.uid, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+  });
+  (data.reminders || []).filter((item) => item.title && item.dueDate).forEach((item) => {
+    batch.set(doc(remindersRef), { title: item.title, dueDate: item.dueDate, repeat: item.repeat || 'none', leadDays: Number(item.leadDays || 0), createdBy: authUser.uid, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
   });
   await batch.commit();
 }
@@ -600,7 +676,7 @@ function renderTodos() {
     });
     row.querySelector('.edit-todo').addEventListener('click', () => openTodoDialog(item));
     row.querySelector('.delete-todo').addEventListener('click', async () => {
-      if (!window.confirm(`刪除「${item.title}」？`)) return;
+      if (!await confirmAction(`刪除「${item.title}」？`, '刪除清單項目')) return;
       try { await deleteDoc(doc(todosRef, item.id)); showToast('已刪除項目'); } catch { showToast('未能刪除項目'); }
     });
   });
@@ -638,7 +714,7 @@ function renderCalendar() {
     const date = new Date(start); date.setDate(start.getDate() + i);
     const iso = toISODate(date);
     const outside = date.getMonth() !== viewMonth;
-    const hasEvents = state.events.some((event) => event.date === iso);
+    const hasEvents = eventsForDate(iso).length > 0;
     html += `<button class="calendar-day ${outside ? 'outside' : ''} ${iso === todayISO ? 'today' : ''} ${iso === selectedDate ? 'selected' : ''}" type="button" data-date="${iso}">${date.getDate()}${hasEvents ? '<span class="event-dot"></span>' : ''}</button>`;
   }
   grid.innerHTML = html;
@@ -655,20 +731,20 @@ function renderSelectedDayEvents() {
   const weekday = ['星期日','星期一','星期二','星期三','星期四','星期五','星期六'][date.getDay()];
   document.getElementById('selected-date-title').textContent = `${date.getMonth() + 1}月${date.getDate()}日 ${weekday}`;
   const holder = document.getElementById('event-list');
-  const events = state.events.filter((event) => event.date === selectedDate).sort((a, b) => (a.time || '99:99').localeCompare(b.time || '99:99'));
+  const events = eventsForDate(selectedDate).sort((a, b) => (a.time || '99:99').localeCompare(b.time || '99:99'));
   if (!events.length) {
     holder.innerHTML = '<div class="empty-state"><span class="emoji">📅</span><strong>這日未有行程</strong><span>按「新增」加入家庭活動。</span></div>';
     return;
   }
   holder.innerHTML = events.map((event) => {
     const meta = EVENT_META[event.category] || EVENT_META.other;
-    return `<div class="event-item" data-id="${escapeAttr(event.id)}"><div class="event-icon">${meta.emoji}</div><div class="event-main"><strong>${event.time ? escapeHTML(event.time) + '　' : ''}${escapeHTML(event.title)}</strong><small>${meta.label}</small></div><div class="row-actions"><button class="mini-icon-button edit-event" type="button" aria-label="修改"><svg><use href="#i-edit"></use></svg></button><button class="mini-icon-button danger delete-event" type="button" aria-label="刪除"><svg><use href="#i-trash"></use></svg></button></div></div>`;
+    return `<div class="event-item" data-id="${escapeAttr(event.id)}"><div class="event-icon">${meta.emoji}</div><div class="event-main"><strong>${event.time ? escapeHTML(event.time) + '　' : ''}${escapeHTML(event.title)}</strong><small>${meta.label}${event.repeat && event.repeat !== 'none' ? ` · ${repeatLabel(event.repeat)}` : ''}</small></div><div class="row-actions"><button class="mini-icon-button edit-event" type="button" aria-label="修改"><svg><use href="#i-edit"></use></svg></button><button class="mini-icon-button danger delete-event" type="button" aria-label="刪除"><svg><use href="#i-trash"></use></svg></button></div></div>`;
   }).join('');
   holder.querySelectorAll('.event-item').forEach((row) => {
     const event = state.events.find((x) => x.id === row.dataset.id);
     row.querySelector('.edit-event').addEventListener('click', () => openEventDialog(event));
     row.querySelector('.delete-event').addEventListener('click', async () => {
-      if (!window.confirm(`刪除「${event.title}」？`)) return;
+      if (!await confirmAction(`刪除「${event.title}」？`, '刪除行程')) return;
       try { await deleteDoc(doc(eventsRef, event.id)); showToast('已刪除行程'); } catch { showToast('未能刪除行程'); }
     });
   });
@@ -683,6 +759,7 @@ function openEventDialog(event = null) {
   document.getElementById('event-date').value = event?.date || selectedDate;
   document.getElementById('event-time').value = event?.time || '';
   document.getElementById('event-category').value = event?.category || 'family';
+  document.getElementById('event-repeat').value = event?.repeat || 'none';
   dialog.showModal();
 }
 
@@ -693,10 +770,11 @@ async function saveEventFromDialog() {
   const date = document.getElementById('event-date').value;
   const time = document.getElementById('event-time').value;
   const category = document.getElementById('event-category').value;
+  const repeat = document.getElementById('event-repeat').value;
   if (!title || !date) return showToast('請輸入事項及日期');
   try {
-    if (id) await updateDoc(doc(eventsRef, id), { title, date, time, category, updatedAt: serverTimestamp() });
-    else await addDoc(eventsRef, { title, date, time, category, createdBy: authUser.uid, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+    if (id) await updateDoc(doc(eventsRef, id), { title, date, time, category, repeat, updatedAt: serverTimestamp() });
+    else await addDoc(eventsRef, { title, date, time, category, repeat, createdBy: authUser.uid, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
     selectedDate = date; const selected = fromISODate(date); viewYear = selected.getFullYear(); viewMonth = selected.getMonth();
     document.getElementById('event-dialog').close(); showToast(id ? '已更新行程' : '已新增行程');
   } catch { showToast('未能儲存行程'); }
@@ -705,6 +783,10 @@ async function saveEventFromDialog() {
 function bindContactUI() {
   document.getElementById('add-contact-top').addEventListener('click', () => openContactDialog());
   document.getElementById('save-contact').addEventListener('click', saveContactFromDialog);
+  document.getElementById('contact-search').addEventListener('input', (event) => {
+    contactQuery = event.target.value.trim().toLocaleLowerCase('zh-Hant');
+    renderContacts();
+  });
 }
 
 function renderContacts() {
@@ -713,20 +795,25 @@ function renderContacts() {
     holder.innerHTML = lockedHTML(authUser ? '等待管理員批准' : '登入後與家人共享實用資料');
     return;
   }
+  const visibleContacts = contactQuery
+    ? state.contacts.filter((item) => [item.name, item.phone, item.address, item.note].some((value) => String(value || '').toLocaleLowerCase('zh-Hant').includes(contactQuery)))
+    : state.contacts;
   const order = ['estate','medical','company','emergency','other'];
   const sections = order.map((category) => {
-    const items = state.contacts.filter((c) => contactCategory(c.category) === category);
+    const items = visibleContacts.filter((c) => contactCategory(c.category) === category);
     if (!items.length) return '';
     const meta = CATEGORY_META[category] || CATEGORY_META.other;
     return `<article class="card contact-card"><div class="contact-title ${meta.cls}"><svg><use href="#i-${meta.icon}"></use></svg>${meta.label}</div>${items.map(contactRowHTML).join('')}</article>`;
   }).join('');
-  holder.innerHTML = sections || '<div class="empty-state"><span class="emoji">☎️</span><strong>未有實用資料</strong><span>按「新增」加入常用電話。</span></div>';
+  holder.innerHTML = sections || (contactQuery
+    ? '<div class="empty-state"><span class="emoji">🔎</span><strong>找不到相符資料</strong><span>試試其他名稱、電話或地址。</span></div>'
+    : '<div class="empty-state"><span class="emoji">☎️</span><strong>未有實用資料</strong><span>按「新增」加入常用電話。</span></div>');
   holder.querySelectorAll('.contact-row').forEach((row) => {
     const item = state.contacts.find((x) => x.id === row.dataset.id);
     row.querySelector('.edit-contact')?.addEventListener('click', () => openContactDialog(item));
     row.querySelector('.delete-contact')?.addEventListener('click', async () => {
       if (item.id === 'emergency-999') return;
-      if (!window.confirm(`刪除「${item.name}」？`)) return;
+      if (!await confirmAction(`刪除「${item.name}」？`, '刪除實用資料')) return;
       try { await deleteDoc(doc(infoRef, item.id)); showToast('已刪除資料'); } catch { showToast('未能刪除資料'); }
     });
   });
@@ -771,6 +858,105 @@ async function saveContactFromDialog() {
     else await addDoc(infoRef, { category, name, phone, address, note: '', sortOrder: 999, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
     document.getElementById('contact-dialog').close(); showToast(id ? '已更新資料' : '已新增資料');
   } catch { showToast('未能儲存資料'); }
+}
+
+function bindNotesUI() {
+  document.getElementById('save-note').addEventListener('click', saveNoteFromDialog);
+  document.getElementById('home-notes').addEventListener('click', async (event) => {
+    const button = event.target.closest('[data-note-action]');
+    if (!button) return;
+    const note = state.notes.find((item) => item.id === button.dataset.id);
+    if (!note) return;
+    if (button.dataset.noteAction === 'edit') openNoteDialog(note);
+    if (button.dataset.noteAction === 'delete' && await confirmAction(`刪除筆記「${note.title}」？`, '刪除筆記')) {
+      try { await deleteDoc(doc(notesRef, note.id)); showToast('已刪除筆記'); } catch { showToast('未能刪除筆記'); }
+    }
+  });
+}
+
+function openNoteDialog(note = null) {
+  if (!guardPrivateAction()) return;
+  document.getElementById('note-dialog-title').textContent = note ? '修改家庭筆記' : '新增家庭筆記';
+  document.getElementById('note-id').value = note?.id || '';
+  document.getElementById('note-title').value = note?.title || '';
+  document.getElementById('note-content').value = note?.content || '';
+  document.getElementById('note-dialog').showModal();
+  setTimeout(() => document.getElementById('note-title').focus(), 50);
+}
+
+async function saveNoteFromDialog() {
+  if (!guardPrivateAction()) return;
+  const id = document.getElementById('note-id').value;
+  const title = document.getElementById('note-title').value.trim();
+  const content = document.getElementById('note-content').value.trim();
+  if (!title) return showToast('請輸入筆記標題');
+  try {
+    if (id) await updateDoc(doc(notesRef, id), { title, content, updatedAt: serverTimestamp() });
+    else await addDoc(notesRef, { title, content, createdBy: authUser.uid, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+    document.getElementById('note-dialog').close();
+    showToast(id ? '已更新筆記' : '已新增筆記');
+  } catch { showToast('未能儲存筆記'); }
+}
+
+function bindRemindersUI() {
+  document.getElementById('save-reminder').addEventListener('click', saveReminderFromDialog);
+  document.getElementById('home-reminders').addEventListener('click', async (event) => {
+    const button = event.target.closest('[data-reminder-action]');
+    if (!button) return;
+    const reminder = state.reminders.find((item) => item.id === button.dataset.id);
+    if (!reminder) return;
+    if (button.dataset.reminderAction === 'edit') openReminderDialog(reminder);
+    if (button.dataset.reminderAction === 'delete' && await confirmAction(`刪除提醒「${reminder.title}」？`, '刪除提醒')) {
+      try { await deleteDoc(doc(remindersRef, reminder.id)); showToast('已刪除提醒'); } catch { showToast('未能刪除提醒'); }
+    }
+  });
+}
+
+function openReminderDialog(reminder = null) {
+  if (!guardPrivateAction()) return;
+  document.getElementById('reminder-dialog-title').textContent = reminder ? '修改提醒' : '新增提醒';
+  document.getElementById('reminder-id').value = reminder?.id || '';
+  document.getElementById('reminder-title-input').value = reminder?.title || '';
+  document.getElementById('reminder-date').value = reminder?.dueDate || toISODate(new Date());
+  document.getElementById('reminder-repeat').value = reminder?.repeat || 'none';
+  document.getElementById('reminder-lead').value = String(reminder?.leadDays ?? 14);
+  document.getElementById('reminder-dialog').showModal();
+}
+
+async function saveReminderFromDialog() {
+  if (!guardPrivateAction()) return;
+  const id = document.getElementById('reminder-id').value;
+  const title = document.getElementById('reminder-title-input').value.trim();
+  const dueDate = document.getElementById('reminder-date').value;
+  const repeat = document.getElementById('reminder-repeat').value;
+  const leadDays = Number(document.getElementById('reminder-lead').value);
+  if (!title || !dueDate) return showToast('請輸入事項及到期日');
+  try {
+    const payload = { title, dueDate, repeat, leadDays, updatedAt: serverTimestamp() };
+    if (id) await updateDoc(doc(remindersRef, id), payload);
+    else await addDoc(remindersRef, { ...payload, createdBy: authUser.uid, createdAt: serverTimestamp() });
+    document.getElementById('reminder-dialog').close();
+    showToast(id ? '已更新提醒' : '已新增提醒');
+  } catch { showToast('未能儲存提醒'); }
+}
+
+let confirmResolver = null;
+function bindConfirmUI() {
+  document.querySelectorAll('[data-confirm-value]').forEach((button) => button.addEventListener('click', () => {
+    document.getElementById('confirm-dialog').close();
+    confirmResolver?.(button.dataset.confirmValue === 'true');
+    confirmResolver = null;
+  }));
+  document.getElementById('confirm-dialog').addEventListener('cancel', (event) => {
+    event.preventDefault(); document.getElementById('confirm-dialog').close(); confirmResolver?.(false); confirmResolver = null;
+  });
+}
+
+function confirmAction(message, title = '請確認') {
+  document.getElementById('confirm-title').textContent = title;
+  document.getElementById('confirm-message').textContent = message;
+  document.getElementById('confirm-dialog').showModal();
+  return new Promise((resolve) => { confirmResolver = resolve; });
 }
 
 function bindMemberUI() {
@@ -838,19 +1024,19 @@ async function approveMember(uid) {
 }
 
 async function rejectRequest(uid) {
-  if (!window.confirm('拒絕這個加入家庭的申請？')) return;
+  if (!await confirmAction('拒絕這個加入家庭的申請？', '拒絕申請')) return;
   try { await deleteDoc(doc(requestsRef, uid)); showToast('已拒絕申請'); } catch { showToast('未能拒絕申請'); }
 }
 
 async function removeMember(uid) {
-  if (!window.confirm('移除這位家庭成員？對方之後可再次申請。')) return;
+  if (!await confirmAction('移除這位家庭成員？對方之後可再次申請。', '移除家庭成員')) return;
   try { await deleteDoc(doc(membersRef, uid)); showToast('已移除家庭成員'); } catch { showToast('未能移除成員'); }
 }
 
 function bindBackupUI() {
   document.getElementById('export-data').addEventListener('click', () => {
     if (!guardPrivateAction()) return;
-    const blob = new Blob([JSON.stringify({ version: 2, exportedAt: new Date().toISOString(), data: state }, null, 2)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify({ version: 3, exportedAt: new Date().toISOString(), data: state }, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -867,7 +1053,7 @@ function bindBackupUI() {
     try {
       const parsed = JSON.parse(await file.text()); const imported = parsed.data || parsed;
       if (!Array.isArray(imported.todos) || !Array.isArray(imported.events) || !Array.isArray(imported.contacts)) throw new Error('Invalid backup');
-      if (!window.confirm('將備份資料加入目前家庭雲端？現有資料不會自動刪除。')) return;
+      if (!await confirmAction('將備份資料加入目前家庭雲端？現有資料不會自動刪除。', '匯入備份')) return;
       await importLegacy(imported); showToast('已匯入家庭雲端');
     } catch { showToast('備份檔案格式不正確'); } finally { event.target.value = ''; }
   });
@@ -878,11 +1064,19 @@ function renderAll() {
 }
 
 function renderHomeSummary() {
+  const agenda = document.getElementById('home-agenda');
+  const tasks = document.getElementById('home-tasks');
+  const notes = document.getElementById('home-notes');
+  const reminders = document.getElementById('home-reminders');
   if (!privateAllowed()) {
     document.getElementById('home-todo-count').textContent = '—';
     document.getElementById('home-todo-note').textContent = authUser ? '等待批准' : '登入後顯示';
     document.getElementById('home-event-count').textContent = '—';
     document.getElementById('home-next-event').textContent = authUser ? '等待批准' : '登入後顯示';
+    agenda.innerHTML = homeLockedPreview(authUser ? '等待批准後顯示家庭行程' : '登入後顯示家庭行程');
+    tasks.innerHTML = homeLockedPreview(authUser ? '等待批准後顯示家庭清單' : '登入後顯示家庭清單');
+    notes.innerHTML = homeLockedPreview(authUser ? '等待批准後顯示家庭筆記' : '登入後顯示家庭筆記');
+    reminders.innerHTML = homeLockedPreview(authUser ? '等待批准後顯示提醒' : '登入後顯示提醒');
     return;
   }
   const pending = state.todos.filter((t) => !t.completed).length;
@@ -890,16 +1084,34 @@ function renderHomeSummary() {
   document.getElementById('home-todo-count').textContent = pending;
   document.getElementById('home-todo-note').textContent = pending ? `${completed} 項已完成` : '全部完成';
   const today = toISODate(new Date());
-  const todaysEvents = state.events.filter((e) => e.date === today).sort((a,b) => (a.time || '99:99').localeCompare(b.time || '99:99'));
+  const todaysEvents = eventsForDate(today).sort((a,b) => (a.time || '99:99').localeCompare(b.time || '99:99'));
   document.getElementById('home-event-count').textContent = todaysEvents.length;
   const next = todaysEvents.find((e) => !e.time || `${today}T${e.time}` >= localDateTimeKey(new Date())) || todaysEvents[0];
   document.getElementById('home-next-event').textContent = next ? `${next.time ? next.time + ' ' : ''}${next.title}` : '今日未有活動';
+  const upcoming = upcomingEventOccurrences(3);
+  agenda.innerHTML = upcoming.length ? upcoming.map((event) => {
+    const meta = EVENT_META[event.category] || EVENT_META.other;
+    const dateLabel = event.date === today ? '今日' : `${Number(event.date.slice(5, 7))}月${Number(event.date.slice(8, 10))}日`;
+    return `<button type="button" class="preview-row" data-home-event-date="${escapeAttr(event.date)}"><span class="preview-icon purple">${meta.emoji}</span><span class="preview-main"><strong>${escapeHTML(event.title)}</strong><small>${dateLabel}${event.time ? ` · ${escapeHTML(event.time)}` : ''} · ${meta.label}</small></span><span class="preview-arrow">›</span></button>`;
+  }).join('') : homeEmptyPreview('📅', '暫時未有即將到來的行程', '加入第一個家庭行程');
+  agenda.querySelectorAll('[data-home-event-date]').forEach((button) => button.addEventListener('click', () => {
+    selectedDate = button.dataset.homeEventDate;
+    const date = fromISODate(selectedDate); viewYear = date.getFullYear(); viewMonth = date.getMonth(); switchPage('calendar');
+  }));
+  const openTasks = state.todos.filter((item) => !item.completed).slice(0, 4);
+  tasks.innerHTML = openTasks.length ? openTasks.map((item) => `<button type="button" class="preview-row task-preview" data-home-task="${escapeAttr(item.id)}"><span class="preview-check" aria-hidden="true"></span><span class="preview-main"><strong>${escapeHTML(item.title)}</strong><small>${item.category === 'shopping' ? '購物' : '待辦'}</small></span></button>`).join('') : homeEmptyPreview('✨', '清單已全部完成', '做得好，今日可以輕鬆一下');
+  tasks.querySelectorAll('[data-home-task]').forEach((button) => button.addEventListener('click', () => switchPage('todos')));
+  const recentNotes = state.notes.slice(0, 3);
+  notes.innerHTML = recentNotes.length ? recentNotes.map((note) => `<article class="note-preview"><button type="button" class="note-content-button" data-note-action="edit" data-id="${escapeAttr(note.id)}"><strong>${escapeHTML(note.title)}</strong><small>${escapeHTML(note.content || '沒有補充內容')}</small></button><button type="button" class="mini-icon-button danger" data-note-action="delete" data-id="${escapeAttr(note.id)}" aria-label="刪除筆記"><svg><use href="#i-trash"></use></svg></button></article>`).join('') : homeEmptyPreview('📝', '未有家庭筆記', '快速記下大家都要知道的事項');
+  const upcomingReminders = state.reminders.map((item) => ({ ...item, nextDate: nextReminderDate(item) })).sort((a, b) => a.nextDate.localeCompare(b.nextDate)).slice(0, 4);
+  reminders.innerHTML = upcomingReminders.length ? upcomingReminders.map((item) => `<article class="reminder-preview"><button type="button" class="reminder-content-button" data-reminder-action="edit" data-id="${escapeAttr(item.id)}"><span class="due-badge ${reminderUrgency(item)}">${formatReminderDays(item.nextDate)}</span><span><strong>${escapeHTML(item.title)}</strong><small>${formatChineseDate(item.nextDate)}${item.repeat !== 'none' ? ` · ${repeatLabel(item.repeat)}` : ''}</small></span></button><button type="button" class="mini-icon-button danger" data-reminder-action="delete" data-id="${escapeAttr(item.id)}" aria-label="刪除提醒"><svg><use href="#i-trash"></use></svg></button></article>`).join('') : homeEmptyPreview('🔔', '未有重要提醒', '加入續期、保險或家庭週期事項');
 }
 
 function updateDateAndGreeting() {
   const date = new Date();
   const weekday = ['星期日','星期一','星期二','星期三','星期四','星期五','星期六'][date.getDay()];
   document.getElementById('home-date').textContent = `${date.getFullYear()}年${date.getMonth()+1}月${date.getDate()}日 ${weekday}`;
+  document.getElementById('home-clock').textContent = `${pad(date.getHours())}:${pad(date.getMinutes())}`;
   const hour = date.getHours();
   const title = hour < 12 ? '早晨！' : hour < 18 ? '午安！' : '晚上好！';
   document.getElementById('greeting-title').textContent = title;
@@ -920,7 +1132,7 @@ async function loadWeather() {
 async function loadBusETA({ quiet = false } = {}) {
   const updated = document.getElementById('bus-updated'); const dot = document.getElementById('bus-status-dot');
   if (!quiet) { dot.className = 'status-dot loading'; updated.textContent = '正在更新巴士資料…'; renderBusSkeleton(); }
-  const results = await Promise.all(ROUTES.map(loadOneRoute));
+  const results = await Promise.all(activeRoutes().map(loadOneRoute));
   renderBusResults(results);
   const successful = results.some((r) => !r.error);
   const dt = new Date();
@@ -975,7 +1187,7 @@ function matchesCitybusDirection(item, config) {
 
 function validFutureEta(item) { return !Number.isNaN(item.etaDate.getTime()) && item.etaDate.getTime() > Date.now() - 90_000; }
 function dedupeEtas(items) { const sorted = items.sort((a,b) => a.etaDate - b.etaDate); const result = []; for (const item of sorted) if (!result.some((x) => x.source === item.source && Math.abs(x.etaDate - item.etaDate) < 45_000)) result.push(item); return result; }
-function renderBusSkeleton() { document.getElementById('bus-list').innerHTML = ROUTES.map((r) => `<div class="bus-row"><span class="route-badge">${r.route}</span><div class="route-destination"><strong>${r.dest}</strong><small>站：${r.stopCode}</small></div><span class="eta-none">載入中…</span></div>`).join(''); }
+function renderBusSkeleton() { document.getElementById('bus-list').innerHTML = activeRoutes().map((r) => `<div class="bus-row"><span class="route-badge">${r.route}</span><div class="route-destination"><strong>${r.dest}</strong><small>站：${r.stopCode}</small></div><span class="eta-none">載入中…</span></div>`).join(''); }
 function renderBusResults(results) { document.getElementById('bus-list').innerHTML = results.map((r) => { const eta = r.error ? '<span class="eta-none">未能更新</span>' : r.etas.length ? `<div class="eta-list">${r.etas.map((x) => `<span class="eta-pill"><span class="eta-operator ${x.source === 'CTB' ? 'ctb' : 'kmb'}">${x.source === 'CTB' ? '城巴' : '九巴'}</span>${formatETA(x.etaDate)}</span>`).join('')}</div>` : '<span class="eta-none">暫無班次</span>'; return `<div class="bus-row"><span class="route-badge">${r.route}</span><div class="route-destination"><strong>${r.dest}</strong><small>${r.jointCitybus ? '九巴＋城巴 · ' : '九巴 · '}站 ${r.stopCode}</small></div>${eta}</div>`; }).join(''); }
 function formatETA(date) { const mins = Math.max(0, Math.round((date.getTime() - Date.now()) / 60000)); return mins <= 1 ? '即將到站' : `${mins} 分鐘`; }
 function weatherEmoji(iconNo) { const n = Number(iconNo); if ([50,51].includes(n)) return '☀️'; if ([52,53].includes(n)) return '🌤️'; if ([54,55,56,57,58,59,60,61,62,63,64].includes(n)) return '☁️'; if ([65,66,67,68,69,70,71,72,73,74,75,76,77].includes(n)) return '🌧️'; if ([80,81,82].includes(n)) return '🌫️'; if ([90,91,92,93].includes(n)) return '🌙'; return '🌤️'; }
@@ -985,6 +1197,62 @@ function setPrivateButtonsEnabled(enabled) {
     const el = document.getElementById(id); if (!el) return; if ('disabled' in el) el.disabled = !enabled; el.classList.toggle('disabled', !enabled);
   });
 }
+function eventsForDate(iso) {
+  const target = fromISODate(iso);
+  return state.events.filter((event) => {
+    if (!event.date || iso < event.date) return false;
+    if (!event.repeat || event.repeat === 'none') return event.date === iso;
+    const start = fromISODate(event.date);
+    if (event.repeat === 'weekly') return Math.round((target - start) / 86400000) % 7 === 0;
+    if (event.repeat === 'monthly') return target.getDate() === Math.min(start.getDate(), new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate());
+    if (event.repeat === 'yearly') return target.getMonth() === start.getMonth() && target.getDate() === Math.min(start.getDate(), new Date(target.getFullYear(), start.getMonth() + 1, 0).getDate());
+    return false;
+  });
+}
+function upcomingEventOccurrences(limit) {
+  const result = [];
+  const cursor = new Date(); cursor.setHours(0, 0, 0, 0);
+  for (let day = 0; day <= 370 && result.length < limit; day += 1) {
+    const date = new Date(cursor); date.setDate(cursor.getDate() + day);
+    const iso = toISODate(date);
+    eventsForDate(iso).filter((event) => day > 0 || !event.time || `${iso}T${event.time}` >= localDateTimeKey(new Date())).forEach((event) => result.push({ ...event, date: iso }));
+    result.sort((a, b) => `${a.date}T${a.time || '99:99'}`.localeCompare(`${b.date}T${b.time || '99:99'}`));
+  }
+  return result.slice(0, limit);
+}
+function repeatLabel(value) { return ({ weekly: '每星期', monthly: '每月', yearly: '每年' })[value] || ''; }
+function nextReminderDate(reminder) {
+  const today = fromISODate(toISODate(new Date()));
+  const start = fromISODate(reminder.dueDate || toISODate(today));
+  if (reminder.repeat === 'monthly' && start < today) {
+    let monthIndex = today.getFullYear() * 12 + today.getMonth();
+    const startIndex = start.getFullYear() * 12 + start.getMonth();
+    monthIndex = Math.max(monthIndex, startIndex);
+    let candidate = dateInMonth(monthIndex, start.getDate());
+    if (candidate < today) candidate = dateInMonth(monthIndex + 1, start.getDate());
+    return toISODate(candidate);
+  }
+  if (reminder.repeat === 'yearly' && start < today) {
+    let year = today.getFullYear();
+    let candidate = dateInYear(year, start.getMonth(), start.getDate());
+    if (candidate < today) candidate = dateInYear(year + 1, start.getMonth(), start.getDate());
+    return toISODate(candidate);
+  }
+  return toISODate(start);
+}
+function dateInMonth(monthIndex, day) { const year = Math.floor(monthIndex / 12); const month = monthIndex % 12; return new Date(year, month, Math.min(day, new Date(year, month + 1, 0).getDate())); }
+function dateInYear(year, month, day) { return new Date(year, month, Math.min(day, new Date(year, month + 1, 0).getDate())); }
+function reminderUrgency(reminder) {
+  const days = Math.ceil((fromISODate(reminder.nextDate) - fromISODate(toISODate(new Date()))) / 86400000);
+  return days <= 0 ? 'overdue' : days <= Number(reminder.leadDays || 0) ? 'soon' : '';
+}
+function formatReminderDays(iso) {
+  const days = Math.ceil((fromISODate(iso) - fromISODate(toISODate(new Date()))) / 86400000);
+  if (days < 0) return `逾期 ${Math.abs(days)} 日`;
+  if (days === 0) return '今日到期';
+  return `${days} 日後`;
+}
+function formatChineseDate(iso) { const date = fromISODate(iso); return `${date.getMonth() + 1}月${date.getDate()}日`; }
 function lockedHTML(message) { return `<div class="empty-state locked-state"><span class="emoji">🔒</span><strong>${escapeHTML(message)}</strong><span>家庭資料只供已批准成員使用。</span></div>`; }
 function sortByCreatedDesc(a,b) { const av = a.createdAt?.seconds || 0; const bv = b.createdAt?.seconds || 0; return bv - av; }
 function toISODate(date) { return `${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())}`; }
@@ -994,4 +1262,6 @@ function pad(value) { return String(value).padStart(2,'0'); }
 async function fetchWithTimeout(url, ms) { const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), ms); try { return await fetch(url, { signal: controller.signal, cache: 'no-store' }); } finally { clearTimeout(timer); } }
 function escapeHTML(value) { return String(value ?? '').replace(/[&<>'"]/g, (char) => ({ '&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;' }[char])); }
 function escapeAttr(value) { return escapeHTML(value); }
+function homeLockedPreview(message) { return `<div class="home-preview-empty"><span>🔒</span><div><strong>${escapeHTML(message)}</strong><small>共享資料受家庭帳戶保護</small></div></div>`; }
+function homeEmptyPreview(icon, title, note) { return `<div class="home-preview-empty"><span>${icon}</span><div><strong>${escapeHTML(title)}</strong><small>${escapeHTML(note)}</small></div></div>`; }
 function showToast(message) { const toast = document.getElementById('toast'); toast.textContent = message; toast.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => toast.classList.remove('show'), 2400); }

@@ -73,6 +73,14 @@ service cloud.firestore {
       match /usefulInfo/{infoId} {
         allow read, create, update, delete: if isApproved(familyId);
       }
+
+      match /notes/{noteId} {
+        allow read, create, update, delete: if isApproved(familyId);
+      }
+
+      match /reminders/{reminderId} {
+        allow read, create, update, delete: if isApproved(familyId);
+      }
     }
   }
 }

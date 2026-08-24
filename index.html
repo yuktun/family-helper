@@ -43,6 +43,10 @@
     <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.65 17.65l1.42 1.42M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.65 6.35l1.42-1.42"/></symbol>
     <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20.5 15.2A8.7 8.7 0 0 1 8.8 3.5 8.7 8.7 0 1 0 20.5 15.2Z"/></symbol>
     <symbol id="i-auto" viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="3"/><path d="M12 6v12M12 6a6 6 0 0 0 0 12"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m16.5 16.5 4 4"/></symbol>
+    <symbol id="i-spark" viewBox="0 0 24 24"><path d="m13 2-8 12h7l-1 8 8-12h-7l1-8Z"/></symbol>
+    <symbol id="i-note" viewBox="0 0 24 24"><path d="M6 3h12a2 2 0 0 1 2 2v10l-6 6H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/><path d="M14 21v-6h6M8 8h8M8 12h5"/></symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 16h12l-1.5-2V9a4.5 4.5 0 0 0-9 0v5L6 16ZM10 20h4"/></symbol>
   </svg>
 
   <main class="app-shell">
@@ -51,7 +55,7 @@
         <div>
           <p id="home-date" class="eyebrow"></p>
           <h1>Fu Fai Home</h1>
-          <p class="subtitle">家庭助手</p>
+          <p class="subtitle">家庭助手 · <span id="home-clock" aria-label="現在時間"></span></p>
         </div>
         <div class="family-badge" aria-label="Fu Fai Home"><svg><use href="#i-home"></use></svg><span>♥</span></div>
       </header>
@@ -103,6 +107,46 @@
           <strong><span id="home-event-count">0</span> 項</strong>
           <small id="home-next-event">今日未有活動</small>
         </button>
+      </div>
+
+      <section class="quick-section" aria-labelledby="quick-title">
+        <div class="section-heading-row home-section-heading">
+          <div><p class="eyebrow blue-text">快速處理</p><h2 id="quick-title">現在要做甚麼？</h2></div>
+        </div>
+        <div class="quick-actions">
+          <button type="button" data-quick-action="todo"><span class="quick-icon green"><svg><use href="#i-plus"></use></svg></span><span><strong>新增清單</strong><small>購物或待辦</small></span></button>
+          <button type="button" data-quick-action="event"><span class="quick-icon purple"><svg><use href="#i-calendar"></use></svg></span><span><strong>加入行程</strong><small>家庭日曆</small></span></button>
+          <button type="button" data-quick-action="contact"><span class="quick-icon orange"><svg><use href="#i-phone"></use></svg></span><span><strong>實用資料</strong><small>電話與地址</small></span></button>
+          <button type="button" data-quick-action="note"><span class="quick-icon blue"><svg><use href="#i-note"></use></svg></span><span><strong>快速筆記</strong><small>記下家庭事項</small></span></button>
+          <button type="button" data-quick-action="reminder"><span class="quick-icon red"><svg><use href="#i-bell"></use></svg></span><span><strong>新增提醒</strong><small>續期與週期事項</small></span></button>
+        </div>
+      </section>
+
+      <article class="card today-card" aria-labelledby="today-title">
+        <div class="section-heading-row">
+          <div><p class="eyebrow purple-text">今日焦點</p><h2 id="today-title">接下來</h2></div>
+          <button class="text-button" type="button" data-go="calendar">查看日曆</button>
+        </div>
+        <div id="home-agenda" class="home-agenda" aria-live="polite"></div>
+      </article>
+
+      <article class="card focus-card" aria-labelledby="focus-title">
+        <div class="section-heading-row">
+          <div><p class="eyebrow green-text">家庭清單</p><h2 id="focus-title">未完成事項</h2></div>
+          <button class="text-button green-text" type="button" data-go="todos">全部清單</button>
+        </div>
+        <div id="home-tasks" class="home-tasks" aria-live="polite"></div>
+      </article>
+
+      <div class="home-secondary-grid">
+        <article class="card reminder-card" data-home-module="reminders" aria-labelledby="reminder-title">
+          <div class="section-heading-row"><div><p class="eyebrow red-text">重要日子</p><h2 id="reminder-title">提醒與續期</h2></div><button class="icon-button compact-icon" type="button" data-quick-action="reminder" aria-label="新增提醒"><svg><use href="#i-plus"></use></svg></button></div>
+          <div id="home-reminders" class="home-reminders" aria-live="polite"></div>
+        </article>
+        <article class="card notes-card" data-home-module="notes" aria-labelledby="notes-title">
+          <div class="section-heading-row"><div><p class="eyebrow blue-text">快速記錄</p><h2 id="notes-title">家庭筆記</h2></div><button class="icon-button compact-icon" type="button" data-quick-action="note" aria-label="新增筆記"><svg><use href="#i-plus"></use></svg></button></div>
+          <div id="home-notes" class="home-notes" aria-live="polite"></div>
+        </article>
       </div>
 
     </section>
@@ -164,6 +208,7 @@
         <button id="add-contact-top" class="header-action orange" type="button"><svg><use href="#i-plus"></use></svg><span>新增</span></button>
       </header>
       <div class="announcement-slot" data-announcement-slot></div>
+      <label class="search-field" for="contact-search"><svg><use href="#i-search"></use></svg><input id="contact-search" type="search" placeholder="搜尋名稱、電話或地址" autocomplete="off" /><span class="sr-only">搜尋實用資料</span></label>
       <div id="contact-groups" class="contact-groups"></div>
     </section>
 
@@ -184,6 +229,19 @@
           <button type="button" data-theme-option="light"><svg><use href="#i-sun"></use></svg><span>日間</span></button>
           <button type="button" data-theme-option="dark"><svg><use href="#i-moon"></use></svg><span>夜間</span></button>
         </div>
+      </article>
+
+      <article class="card dashboard-settings-card">
+        <div class="card-heading compact"><div><h2>首頁模組</h2><p>選擇這部裝置首頁顯示的內容。</p></div></div>
+        <div class="setting-list">
+          <label><span><strong>提醒與續期</strong><small>顯示即將到期的重要事項</small></span><input type="checkbox" data-module-toggle="reminders" checked /></label>
+          <label><span><strong>家庭筆記</strong><small>顯示最近的共享筆記</small></span><input type="checkbox" data-module-toggle="notes" checked /></label>
+        </div>
+      </article>
+
+      <article class="card route-settings-card">
+        <div class="card-heading compact"><div><h2>首頁巴士路線</h2><p>選擇這部裝置要顯示及更新的路線。</p></div></div>
+        <div id="route-settings" class="setting-list route-setting-list"></div>
       </article>
 
       <article id="announcement-admin-card" class="card announcement-admin-card" hidden>
@@ -257,7 +315,38 @@
       <label>事項<input id="event-title" maxlength="80" placeholder="例如：家庭晚飯" required /></label>
       <div class="two-col"><label>日期<input id="event-date" type="date" required /></label><label>時間<input id="event-time" type="time" /></label></div>
       <label>類別<select id="event-category"><option value="family">家庭</option><option value="school">學校</option><option value="medical">醫療</option><option value="car">汽車</option><option value="bill">繳費</option><option value="birthday">生日</option><option value="other">其他</option></select></label>
+      <label>重複<select id="event-repeat"><option value="none">不重複</option><option value="weekly">每星期</option><option value="monthly">每月</option><option value="yearly">每年</option></select></label>
       <div class="dialog-actions"><button class="secondary-button" type="button" data-dialog-cancel>取消</button><button id="save-event" class="primary-button purple" value="default" type="button">儲存</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="note-dialog" class="app-dialog">
+    <form method="dialog">
+      <div class="dialog-head"><h2 id="note-dialog-title">新增家庭筆記</h2><button class="dialog-close" type="button" data-dialog-cancel aria-label="取消">×</button></div>
+      <input type="hidden" id="note-id" />
+      <label>標題<input id="note-title" maxlength="60" placeholder="例如：今週要處理" required /></label>
+      <label>內容<textarea id="note-content" maxlength="500" rows="5" placeholder="記下電話、安排或家庭資訊"></textarea></label>
+      <div class="dialog-actions"><button class="secondary-button" type="button" data-dialog-cancel>取消</button><button id="save-note" class="primary-button" value="default" type="button">儲存</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="reminder-dialog" class="app-dialog">
+    <form method="dialog">
+      <div class="dialog-head"><h2 id="reminder-dialog-title">新增提醒</h2><button class="dialog-close" type="button" data-dialog-cancel aria-label="取消">×</button></div>
+      <input type="hidden" id="reminder-id" />
+      <label>事項<input id="reminder-title-input" maxlength="80" placeholder="例如：汽車牌照續期" required /></label>
+      <label>到期日<input id="reminder-date" type="date" required /></label>
+      <label>重複<select id="reminder-repeat"><option value="none">不重複</option><option value="monthly">每月</option><option value="yearly">每年</option></select></label>
+      <label>提前提示<select id="reminder-lead"><option value="0">到期當日</option><option value="7">提前 7 日</option><option value="14">提前 14 日</option><option value="30">提前 30 日</option></select></label>
+      <div class="dialog-actions"><button class="secondary-button" type="button" data-dialog-cancel>取消</button><button id="save-reminder" class="primary-button" value="default" type="button">儲存</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="confirm-dialog" class="app-dialog confirm-dialog">
+    <form method="dialog">
+      <div class="dialog-head"><h2 id="confirm-title">請確認</h2><button class="dialog-close" type="button" data-confirm-value="false" aria-label="取消">×</button></div>
+      <p id="confirm-message"></p>
+      <div class="dialog-actions"><button class="secondary-button" type="button" data-confirm-value="false">取消</button><button class="primary-button danger-button" type="button" data-confirm-value="true">確認</button></div>
     </form>
   </dialog>
 
