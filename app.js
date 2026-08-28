@@ -511,13 +511,8 @@ function cloudListenerError(error) {
 
 async function ensureDefaultInfo() {
   const snapshot = await getDocs(infoRef);
+  if (!snapshot.empty) return;
   const batch = writeBatch(db);
-  const legacyCompany = snapshot.docs.find((item) => item.id === 'school' && item.data().name === '學校' && item.data().category === 'school');
-  if (legacyCompany) batch.update(legacyCompany.ref, { category: 'company', name: '公司', updatedAt: serverTimestamp() });
-  if (!snapshot.empty) {
-    if (legacyCompany) await batch.commit();
-    return;
-  }
   const defaults = [
     ['management-office', { category: 'estate', name: '管理處', phone: '', address: '', note: '', sortOrder: 10 }],
     ['security-office', { category: 'estate', name: '保安室', phone: '', address: '', note: '', sortOrder: 20 }],

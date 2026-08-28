@@ -31,7 +31,7 @@ env.FIREBASE_CLI_DISABLE_UPDATE_CHECK = 'true';
 env.CI = 'true';
 const pathKey = Object.keys(env).find((key) => key.toLowerCase() === 'path') || 'Path';
 env[pathKey] = `${join(env.JAVA_HOME, 'bin')};${env[pathKey] || ''}`;
-const testCommand = `"${process.execPath}" --test test/firestore-emulator.test.js`;
+const testCommand = `"${process.execPath}" --test --test-concurrency=1 test/firestore-emulator.test.js test/migration-emulator.test.js`;
 
 const result = spawnSync(
   process.execPath,

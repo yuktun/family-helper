@@ -154,6 +154,8 @@ test('Firestore emulator: current calendar shape is writable', async () => {
 test('Firestore emulator: current useful info, note, and reminder shapes are writable', async () => {
   const db = auth('member');
   await assertSucceeds(setDoc(doc(db, path('usefulInfo', 'i1')), { category: 'medical', name: '醫生', phone: '1234', address: '香港', note: '', sortOrder: 0, createdAt: now, updatedAt: now }));
+  await assertSucceeds(setDoc(doc(db, path('usefulInfo', 'company')), { category: 'company', name: '公司', phone: '', address: '', note: '', sortOrder: 40, createdAt: now, updatedAt: now }));
+  await assertFails(setDoc(doc(db, path('usefulInfo', 'legacy-school-write')), { category: 'school', name: '學校', phone: '', address: '', note: '', sortOrder: 40, createdAt: now, updatedAt: now }));
   await assertSucceeds(setDoc(doc(db, path('notes', 'n1')), { title: '門鎖', content: '提示', createdBy: 'member', createdAt: now, updatedAt: now }));
   await assertSucceeds(setDoc(doc(db, path('reminders', 'r1')), { title: '續期', dueDate: '2027-01-01', repeat: 'yearly', leadDays: 30, createdBy: 'member', createdAt: now, updatedAt: now }));
 });

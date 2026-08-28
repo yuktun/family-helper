@@ -8,4 +8,7 @@ node_modules/
 .firebase/
 firebase-debug.log*
 *.log
+migration-private/
+*.migration-plan.json
+*.rollback.json
 

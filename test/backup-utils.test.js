@@ -43,3 +43,12 @@ test('rejects oversized files and record counts before import', () => {
   const tooMany = createBackup({ ...data, todos: Array.from({ length: MAX_BACKUP_RECORDS + 1 }, () => ({ title: 'x', category: 'todo', completed: false })) });
   assert.throws(() => validateBackup(tooMany));
 });
+
+test('useful-information backups accept company and reject legacy school as writable input', () => {
+  const company = structuredClone(createBackup(data, '2026-08-27T00:00:00Z'));
+  company.data.contacts[0].category = 'company';
+  assert.equal(validateBackup(company).contacts[0].category, 'company');
+  const legacy = structuredClone(company);
+  legacy.data.contacts[0].category = 'school';
+  assert.throws(() => validateBackup(legacy), /not supported/);
+});

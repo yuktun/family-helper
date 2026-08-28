@@ -20,3 +20,9 @@ test('private writes have field allowlists and value validation', () => {
 test('announcements remain public-read and admin-write only', () => {
   assert.match(rules, /match \/announcements\/\{announcementId\}[\s\S]*?allow read: if true;[\s\S]*?allow create: if isAdmin\(familyId\)/);
 });
+
+test('useful-information rules treat company as canonical and school as non-writable', () => {
+  const block = rules.match(/match \/usefulInfo\/\{infoId\} \{([\s\S]*?)(?=\n      \}|$)/)?.[1] || '';
+  assert.match(block, /category in \['estate', 'medical', 'company', 'emergency', 'other'\]/);
+  assert.doesNotMatch(block, /'school'/);
+});
