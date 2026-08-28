@@ -4,5 +4,8 @@ Desktop.ini
 .idea/
 .vscode/
 node_modules/
+.tools/
+.firebase/
+firebase-debug.log*
 *.log
 

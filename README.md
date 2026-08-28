@@ -64,7 +64,15 @@ families/home/
   todos/{todoId}
   calendarEvents/{eventId}
   usefulInfo/{infoId}
+  notes/{noteId}
+  reminders/{reminderId}
 ```
+
+## 備份與還原
+
+備份格式目前為版本 3，涵蓋清單、日曆、實用資料、筆記及提醒。匯入前會檢查版本、檔案大小、記錄數量、必要集合、欄位類型、日期及可用選項；不合規格的檔案不會寫入 Firestore。
+
+匯入採用「加入」模式：不會刪除或取代現有雲端資料，也不會自動辨認重複記錄，所以重複匯入同一檔案會產生重複項目。每次備份最多 400 筆記錄及 2 MiB，確保整次匯入可在單一 Firestore batch 內完成；batch 失敗時不會顯示成功訊息。
 
 ### 初始管理員
 
@@ -120,6 +128,22 @@ python -m http.server 8000
 ```
 
 然後開：`http://localhost:8000/`
+
+自動化可靠性測試（不會連接或修改 Firebase）：
+
+```bash
+npm test
+```
+
+Firestore Rules 的本機 Emulator 測試使用隔離的 `demo-family-helpers` 專案 ID，不需 Firebase 登入，亦不會接觸正式環境：
+
+```bash
+npm run test:firestore
+```
+
+Firebase 環境核對、相容性限制及正式發布前資料審核方案見 `FIREBASE_ENVIRONMENT.md`。
+
+正式發布前亦必須依照 `RELEASE_CHECKLIST.md` 分別驗證及獲批發布網站與 Firestore Rules。
 
 如要測試 Google Authentication，localhost 一般可作 Firebase Auth 開發來源；實際部署請以 GitHub Pages 測試完整流程。
 

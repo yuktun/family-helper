@@ -20,6 +20,21 @@ service cloud.firestore {
         && familyMember(familyId).data.role == 'admin';
     }
 
+    function validText(value, max) {
+      return value is string && value.size() > 0 && value.size() <= max;
+    }
+
+    function validOptionalText(value, max) {
+      return value is string && value.size() <= max;
+    }
+
+    function validAudit(data) {
+      return data.createdAt is timestamp
+        && data.updatedAt is timestamp
+        && data.createdBy is string
+        && data.createdBy.size() > 0;
+    }
+
     match /families/{familyId} {
       allow read, write: if false;
 
@@ -34,7 +49,8 @@ service cloud.firestore {
           && request.resource.data.uid == request.auth.uid
           && request.resource.data.email == request.auth.token.email
           && request.resource.data.role == 'admin'
-          && request.resource.data.status == 'approved';
+          && request.resource.data.status == 'approved'
+          && request.resource.data.keys().hasOnly(['uid', 'email', 'displayName', 'photoURL', 'role', 'status', 'createdAt', 'updatedAt']);
 
         allow create, update, delete: if isAdmin(familyId);
       }
@@ -45,7 +61,8 @@ service cloud.firestore {
           && request.auth.uid == uid
           && request.resource.data.uid == request.auth.uid
           && request.resource.data.email == request.auth.token.email
-          && request.resource.data.status == 'pending';
+          && request.resource.data.status == 'pending'
+          && request.resource.data.keys().hasOnly(['uid', 'email', 'displayName', 'photoURL', 'status', 'createdAt', 'updatedAt']);
         allow delete: if isAdmin(familyId) || (signedIn() && request.auth.uid == uid);
         allow update: if isAdmin(familyId);
       }
@@ -63,23 +80,63 @@ service cloud.firestore {
       }
 
       match /todos/{itemId} {
-        allow read, create, update, delete: if isApproved(familyId);
+        allow read, delete: if isApproved(familyId);
+        allow create, update: if isApproved(familyId)
+          && request.resource.data.keys().hasOnly(['title', 'category', 'completed', 'createdBy', 'createdAt', 'updatedAt'])
+          && validText(request.resource.data.title, 200)
+          && request.resource.data.category in ['todo', 'shopping']
+          && request.resource.data.completed is bool
+          && validAudit(request.resource.data);
       }
 
       match /calendarEvents/{eventId} {
-        allow read, create, update, delete: if isApproved(familyId);
+        allow read, delete: if isApproved(familyId);
+        allow create, update: if isApproved(familyId)
+          && request.resource.data.keys().hasOnly(['title', 'date', 'time', 'category', 'repeat', 'createdBy', 'createdAt', 'updatedAt'])
+          && validText(request.resource.data.title, 200)
+          && validText(request.resource.data.date, 10)
+          && validOptionalText(request.resource.data.time, 5)
+          && request.resource.data.category in ['family', 'school', 'medical', 'car', 'bill', 'birthday', 'other']
+          && request.resource.data.repeat in ['none', 'weekly', 'monthly', 'yearly']
+          && validAudit(request.resource.data);
       }
 
       match /usefulInfo/{infoId} {
-        allow read, create, update, delete: if isApproved(familyId);
+        allow read, delete: if isApproved(familyId);
+        allow create, update: if isApproved(familyId)
+          && request.resource.data.keys().hasOnly(['category', 'name', 'phone', 'address', 'note', 'sortOrder', 'createdAt', 'updatedAt'])
+          && request.resource.data.category in ['estate', 'medical', 'company', 'emergency', 'other']
+          && validText(request.resource.data.name, 120)
+          && validOptionalText(request.resource.data.phone, 80)
+          && validOptionalText(request.resource.data.address, 500)
+          && validOptionalText(request.resource.data.note, 1000)
+          && request.resource.data.sortOrder is number
+          && request.resource.data.sortOrder >= 0
+          && request.resource.data.sortOrder <= 100000
+          && request.resource.data.createdAt is timestamp
+          && request.resource.data.updatedAt is timestamp;
       }
 
       match /notes/{noteId} {
-        allow read, create, update, delete: if isApproved(familyId);
+        allow read, delete: if isApproved(familyId);
+        allow create, update: if isApproved(familyId)
+          && request.resource.data.keys().hasOnly(['title', 'content', 'createdBy', 'createdAt', 'updatedAt'])
+          && validText(request.resource.data.title, 200)
+          && validOptionalText(request.resource.data.content, 5000)
+          && validAudit(request.resource.data);
       }
 
       match /reminders/{reminderId} {
-        allow read, create, update, delete: if isApproved(familyId);
+        allow read, delete: if isApproved(familyId);
+        allow create, update: if isApproved(familyId)
+          && request.resource.data.keys().hasOnly(['title', 'dueDate', 'repeat', 'leadDays', 'createdBy', 'createdAt', 'updatedAt'])
+          && validText(request.resource.data.title, 200)
+          && validText(request.resource.data.dueDate, 10)
+          && request.resource.data.repeat in ['none', 'monthly', 'yearly']
+          && request.resource.data.leadDays is int
+          && request.resource.data.leadDays >= 0
+          && request.resource.data.leadDays <= 365
+          && validAudit(request.resource.data);
       }
     }
   }

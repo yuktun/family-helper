@@ -22,6 +22,8 @@ import {
   enableIndexedDbPersistence,
   writeBatch,
 } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
+import { createBackup, validateBackup, MAX_BACKUP_BYTES } from './backup-utils.js';
+import { popupLoginAction } from './auth-utils.js';
 
 const firebaseConfig = {
   apiKey: 'AIzaSyB7oF8M9bPBCsdO6FGjIUezIfvjKmd0bOU',
@@ -363,7 +365,13 @@ function bindAuthUI() {
     try {
       await signInWithPopup(auth, provider);
     } catch (error) {
-      console.warn('Popup login failed, trying redirect', error);
+      const action = popupLoginAction(error.code);
+      if (action === 'cancel') return;
+      if (action === 'error') {
+        console.warn('Popup login failed', error);
+        showToast('Google 登入失敗，請稍後再試');
+        return;
+      }
       try { await signInWithRedirect(auth, provider); } catch { showToast('Google 登入失敗，請稍後再試'); }
     }
   });
@@ -544,26 +552,30 @@ function legacyHasMeaningfulData(data) {
 }
 
 async function importLegacy(data) {
-  const batch = writeBatch(db);
+  const writes = [];
   (data.todos || []).forEach((item) => {
     const ref = doc(todosRef);
-    batch.set(ref, { title: item.text || item.title || '', category: item.category || 'todo', completed: Boolean(item.done ?? item.completed), createdBy: authUser.uid, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+    writes.push((batch) => batch.set(ref, { title: item.text || item.title || '', category: item.category || 'todo', completed: Boolean(item.done ?? item.completed), createdBy: authUser.uid, createdAt: serverTimestamp(), updatedAt: serverTimestamp() }));
   });
   (data.events || []).forEach((item) => {
     const ref = doc(eventsRef);
-    batch.set(ref, { title: item.title || '', date: item.date || toISODate(new Date()), time: item.time || '', category: item.category || 'other', createdBy: authUser.uid, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+    writes.push((batch) => batch.set(ref, { title: item.title || '', date: item.date || toISODate(new Date()), time: item.time || '', category: item.category || 'other', repeat: item.repeat || 'none', createdBy: authUser.uid, createdAt: serverTimestamp(), updatedAt: serverTimestamp() }));
   });
   (data.contacts || []).filter((c) => c.name).forEach((item) => {
     const ref = item.id === 'emergency-999' ? doc(infoRef, 'emergency-999') : doc(infoRef);
-    batch.set(ref, { category: item.category || 'other', name: item.name, phone: item.phone || '', address: item.address || '', note: item.note || '', sortOrder: item.sortOrder || 999, createdAt: serverTimestamp(), updatedAt: serverTimestamp() }, { merge: true });
+    writes.push((batch) => batch.set(ref, { category: item.category || 'other', name: item.name, phone: item.phone || '', address: item.address || '', note: item.note || '', sortOrder: item.sortOrder ?? 999, createdAt: serverTimestamp(), updatedAt: serverTimestamp() }, { merge: true }));
   });
   (data.notes || []).filter((item) => item.title).forEach((item) => {
-    batch.set(doc(notesRef), { title: item.title, content: item.content || '', createdBy: authUser.uid, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+    writes.push((batch) => batch.set(doc(notesRef), { title: item.title, content: item.content || '', createdBy: authUser.uid, createdAt: serverTimestamp(), updatedAt: serverTimestamp() }));
   });
   (data.reminders || []).filter((item) => item.title && item.dueDate).forEach((item) => {
-    batch.set(doc(remindersRef), { title: item.title, dueDate: item.dueDate, repeat: item.repeat || 'none', leadDays: Number(item.leadDays || 0), createdBy: authUser.uid, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+    writes.push((batch) => batch.set(doc(remindersRef), { title: item.title, dueDate: item.dueDate, repeat: item.repeat || 'none', leadDays: Number(item.leadDays || 0), createdBy: authUser.uid, createdAt: serverTimestamp(), updatedAt: serverTimestamp() }));
   });
-  await batch.commit();
+  for (let start = 0; start < writes.length; start += 400) {
+    const batch = writeBatch(db);
+    writes.slice(start, start + 400).forEach((write) => write(batch));
+    await batch.commit();
+  }
 }
 
 function renderAuthState() {
@@ -672,7 +684,7 @@ function renderTodos() {
   holder.querySelectorAll('.todo-item').forEach((row) => {
     const item = state.todos.find((x) => x.id === row.dataset.id);
     row.querySelector('.todo-check').addEventListener('change', async (e) => {
-      try { await updateDoc(doc(todosRef, item.id), { completed: e.target.checked, updatedAt: serverTimestamp() }); } catch { showToast('未能更新項目'); }
+      try { await updateDoc(doc(todosRef, item.id), { completed: e.target.checked, updatedAt: serverTimestamp() }); } catch { renderTodos(); renderHomeSummary(); showToast('未能更新項目'); }
     });
     row.querySelector('.edit-todo').addEventListener('click', () => openTodoDialog(item));
     row.querySelector('.delete-todo').addEventListener('click', async () => {
@@ -1036,7 +1048,7 @@ async function removeMember(uid) {
 function bindBackupUI() {
   document.getElementById('export-data').addEventListener('click', () => {
     if (!guardPrivateAction()) return;
-    const blob = new Blob([JSON.stringify({ version: 3, exportedAt: new Date().toISOString(), data: state }, null, 2)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify(createBackup(state), null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -1049,11 +1061,15 @@ function bindBackupUI() {
   });
   document.getElementById('import-data').addEventListener('change', async (event) => {
     const file = event.target.files?.[0];
-    if (!file || !guardPrivateAction()) return;
+    if (!file) return;
+    if (!guardPrivateAction()) {
+      event.target.value = '';
+      return;
+    }
     try {
-      const parsed = JSON.parse(await file.text()); const imported = parsed.data || parsed;
-      if (!Array.isArray(imported.todos) || !Array.isArray(imported.events) || !Array.isArray(imported.contacts)) throw new Error('Invalid backup');
-      if (!await confirmAction('將備份資料加入目前家庭雲端？現有資料不會自動刪除。', '匯入備份')) return;
+      if (file.size > MAX_BACKUP_BYTES) throw new Error('Backup file is too large');
+      const imported = validateBackup(JSON.parse(await file.text()), file.size);
+      if (!await confirmAction('將備份資料加入目前家庭雲端？現有資料不會刪除或去除重複項目，因此可能出現重複資料。', '匯入備份')) return;
       await importLegacy(imported); showToast('已匯入家庭雲端');
     } catch { showToast('備份檔案格式不正確'); } finally { event.target.value = ''; }
   });
