@@ -8,16 +8,24 @@ const data = {
   contacts: [{ id: 'c1', category: 'medical', name: '醫生', phone: '1234', address: '香港', note: '帶報告', sortOrder: 0 }],
   notes: [{ id: 'n1', title: '門鎖', content: '提示' }],
   reminders: [{ id: 'r1', title: '續期', dueDate: '2027-01-01', repeat: 'yearly', leadDays: 0 }],
+  expenses: [{ id: 'x1', title: '超市', amountCents: 12850, currency: 'HKD', date: '2026-08-27', category: 'groceries', paidBy: '媽媽', note: '' }],
 };
 
-test('version 3 backup preserves all supported fields and recurrence', () => {
+test('version 4 backup preserves all supported fields and recurrence', () => {
   assert.deepEqual(validateBackup(createBackup(data, '2026-08-27T00:00:00.000Z')), {
     todos: [{ title: '買奶', category: 'shopping', completed: false }],
     events: [{ title: '覆診', date: '2026-09-30', time: '09:05', category: 'medical', repeat: 'monthly' }],
     contacts: [{ category: 'medical', name: '醫生', phone: '1234', address: '香港', note: '帶報告', sortOrder: 0 }],
     notes: [{ title: '門鎖', content: '提示' }],
     reminders: [{ title: '續期', dueDate: '2027-01-01', repeat: 'yearly', leadDays: 0 }],
+    expenses: [{ title: '超市', amountCents: 12850, currency: 'HKD', date: '2026-08-27', category: 'groceries', paidBy: '媽媽', note: '' }],
   });
+});
+
+test('version 3 backups remain importable with no expenses', () => {
+  const legacy = createBackup(Object.fromEntries(Object.entries(data).filter(([key]) => key !== 'expenses')));
+  legacy.version = 3;
+  assert.deepEqual(validateBackup(legacy).expenses, []);
 });
 
 test('accepts a valid backup containing empty supported collections', () => {
@@ -32,6 +40,7 @@ for (const [name, mutate] of [
   ['wrong completed type', (x) => { x.data.todos[0].completed = 'false'; }],
   ['invalid date', (x) => { x.data.events[0].date = '2026-02-30'; }],
   ['invalid enum', (x) => { x.data.events[0].repeat = 'daily'; }],
+  ['invalid expense amount', (x) => { x.data.expenses[0].amountCents = 1.5; }],
 ]) test(`rejects ${name}`, () => {
   const candidate = structuredClone(createBackup(data, '2026-08-27T00:00:00Z'));
   mutate(candidate);

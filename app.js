@@ -92,8 +92,9 @@ const requestsRef = collection(familyRef, 'membershipRequests');
 const announcementsRef = collection(familyRef, 'announcements');
 const notesRef = collection(familyRef, 'notes');
 const remindersRef = collection(familyRef, 'reminders');
+const expensesRef = collection(familyRef, 'expenses');
 
-let state = { todos: [], events: [], contacts: [], notes: [], reminders: [] };
+let state = { todos: [], events: [], contacts: [], notes: [], reminders: [], expenses: [] };
 let announcements = [];
 let announcementAccessError = false;
 let announcementUnsub = null;
@@ -111,6 +112,8 @@ const now = new Date();
 let viewYear = now.getFullYear();
 let viewMonth = now.getMonth();
 let selectedDate = toISODate(now);
+let expenseViewYear = now.getFullYear();
+let expenseViewMonth = now.getMonth();
 let busTimer = null;
 let toastTimer = null;
 let networkOnline = navigator.onLine;
@@ -138,6 +141,7 @@ function init() {
   bindDashboardSettings();
   bindNotesUI();
   bindRemindersUI();
+  bindExpensesUI();
   bindConfirmUI();
   updateDateAndGreeting();
   clockTimer = window.setInterval(updateDateAndGreeting, 30_000);
@@ -242,6 +246,7 @@ function switchPage(page) {
   if (page === 'info') renderContacts();
   if (page === 'settings') { renderAuthState(); renderMemberPanel(); renderAnnouncements(); }
   if (page === 'todos') renderTodos();
+  if (page === 'expenses') renderExpenses();
 }
 
 function bindHomeUI() {
@@ -253,6 +258,7 @@ function bindHomeUI() {
     if (action === 'contact') switchPage('info');
     if (action === 'note') openNoteDialog();
     if (action === 'reminder') openReminderDialog();
+    if (action === 'expense') openExpenseDialog();
   }));
 }
 
@@ -385,7 +391,7 @@ async function handleAuthState(user) {
   authUser = user;
   member = null;
   pendingRequest = null;
-  state = { todos: [], events: [], contacts: [], notes: [], reminders: [] };
+  state = { todos: [], events: [], contacts: [], notes: [], reminders: [], expenses: [] };
 
   if (!user) {
     renderAll();
@@ -432,7 +438,7 @@ async function observeMembership(user) {
       await startSharedListeners();
     } else {
       stopSharedListeners();
-      state = { todos: [], events: [], contacts: [], notes: [], reminders: [] };
+      state = { todos: [], events: [], contacts: [], notes: [], reminders: [], expenses: [] };
       if ((user.email || '').toLowerCase() !== ADMIN_EMAIL.toLowerCase()) await ensurePendingRequest(user);
     }
     renderAll();
@@ -486,6 +492,10 @@ async function startSharedListeners() {
   sharedUnsubs.push(onSnapshot(remindersRef, (snap) => {
     state.reminders = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
     renderHomeSummary();
+  }, cloudListenerError));
+  sharedUnsubs.push(onSnapshot(expensesRef, (snap) => {
+    state.expenses = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    renderExpenses();
   }, cloudListenerError));
 
   if (isAdmin()) {
@@ -565,6 +575,9 @@ async function importLegacy(data) {
   });
   (data.reminders || []).filter((item) => item.title && item.dueDate).forEach((item) => {
     writes.push((batch) => batch.set(doc(remindersRef), { title: item.title, dueDate: item.dueDate, repeat: item.repeat || 'none', leadDays: Number(item.leadDays || 0), createdBy: authUser.uid, createdAt: serverTimestamp(), updatedAt: serverTimestamp() }));
+  });
+  (data.expenses || []).filter((item) => item.title && item.date && item.amountCents).forEach((item) => {
+    writes.push((batch) => batch.set(doc(expensesRef), { title: item.title, amountCents: Number(item.amountCents), currency: 'HKD', date: item.date, category: item.category || 'other', paidBy: item.paidBy || '', note: item.note || '', createdBy: authUser.uid, createdAt: serverTimestamp(), updatedAt: serverTimestamp() }));
   });
   for (let start = 0; start < writes.length; start += 400) {
     const batch = writeBatch(db);
@@ -947,6 +960,119 @@ async function saveReminderFromDialog() {
   } catch { showToast('未能儲存提醒'); }
 }
 
+const EXPENSE_META = {
+  groceries: ['買餸', '🛒'], dining: ['飲食', '🍜'], transport: ['交通', '🚇'], home: ['家居', '🏠'],
+  utilities: ['賬單', '🧾'], health: ['醫療', '🩺'], education: ['教育', '📚'], leisure: ['消閒', '🎬'], other: ['其他', '📌'],
+};
+
+function bindExpensesUI() {
+  document.getElementById('add-expense-top').addEventListener('click', () => openExpenseDialog());
+  document.getElementById('add-expense-fab').addEventListener('click', () => openExpenseDialog());
+  document.getElementById('save-expense').addEventListener('click', saveExpenseFromDialog);
+  document.getElementById('prev-expense-month').addEventListener('click', () => changeExpenseMonth(-1));
+  document.getElementById('next-expense-month').addEventListener('click', () => changeExpenseMonth(1));
+  document.getElementById('expense-current-month').addEventListener('click', () => {
+    const today = new Date(); expenseViewYear = today.getFullYear(); expenseViewMonth = today.getMonth(); renderExpenses();
+  });
+  document.getElementById('expense-list').addEventListener('click', async (event) => {
+    const button = event.target.closest('[data-expense-action]');
+    if (!button) return;
+    const expense = state.expenses.find((item) => item.id === button.dataset.id);
+    if (!expense) return;
+    if (button.dataset.expenseAction === 'edit') openExpenseDialog(expense);
+    if (button.dataset.expenseAction === 'delete' && await confirmAction(`刪除開支「${expense.title}」？`, '刪除開支')) {
+      try { await deleteDoc(doc(expensesRef, expense.id)); showToast('已刪除開支'); } catch { showToast('未能刪除開支'); }
+    }
+  });
+}
+
+function changeExpenseMonth(offset) {
+  const next = new Date(expenseViewYear, expenseViewMonth + offset, 1);
+  expenseViewYear = next.getFullYear(); expenseViewMonth = next.getMonth(); renderExpenses();
+}
+
+function openExpenseDialog(expense = null) {
+  if (!guardPrivateAction()) return;
+  document.getElementById('expense-dialog-title').textContent = expense ? '修改家庭開支' : '新增家庭開支';
+  document.getElementById('expense-id').value = expense?.id || '';
+  document.getElementById('expense-title').value = expense?.title || '';
+  document.getElementById('expense-amount').value = expense ? (Number(expense.amountCents) / 100).toFixed(2) : '';
+  document.getElementById('expense-date').value = expense?.date || toISODate(new Date());
+  document.getElementById('expense-category').value = expense?.category || 'groceries';
+  document.getElementById('expense-paid-by').value = expense?.paidBy || '';
+  document.getElementById('expense-note').value = expense?.note || '';
+  document.getElementById('expense-dialog').showModal();
+  setTimeout(() => document.getElementById('expense-title').focus(), 50);
+}
+
+async function saveExpenseFromDialog() {
+  if (!guardPrivateAction()) return;
+  const id = document.getElementById('expense-id').value;
+  const title = document.getElementById('expense-title').value.trim();
+  const amount = Number(document.getElementById('expense-amount').value);
+  const date = document.getElementById('expense-date').value;
+  const category = document.getElementById('expense-category').value;
+  const paidBy = document.getElementById('expense-paid-by').value.trim();
+  const note = document.getElementById('expense-note').value.trim();
+  if (!title || !date || !Number.isFinite(amount) || amount < 0.01 || amount > 9999999.99) return showToast('請輸入項目、日期及有效金額');
+  const payload = { title, amountCents: Math.round(amount * 100), currency: 'HKD', date, category, paidBy, note, updatedAt: serverTimestamp() };
+  try {
+    if (id) await updateDoc(doc(expensesRef, id), payload);
+    else await addDoc(expensesRef, { ...payload, createdBy: authUser.uid, createdAt: serverTimestamp() });
+    document.getElementById('expense-dialog').close();
+    expenseViewYear = Number(date.slice(0, 4)); expenseViewMonth = Number(date.slice(5, 7)) - 1;
+    showToast(id ? '已更新開支' : '已記錄開支');
+  } catch { showToast('未能儲存開支'); }
+}
+
+function renderExpenses() {
+  const list = document.getElementById('expense-list');
+  if (!list) return;
+  document.getElementById('expense-month-title').textContent = `${expenseViewYear}年 ${expenseViewMonth + 1}月`;
+  if (!privateAllowed()) {
+    document.getElementById('expense-month-total').textContent = 'HK$—';
+    document.getElementById('expense-month-count').textContent = authUser ? '等待批准' : '登入後顯示';
+    document.getElementById('expense-breakdown').innerHTML = '';
+    document.getElementById('expense-month-change').textContent = '';
+    document.getElementById('expense-current-month').hidden = true;
+    list.innerHTML = lockedHTML(authUser ? '等待批准後顯示家庭開支' : '登入後顯示家庭開支');
+    return;
+  }
+  const prefix = `${expenseViewYear}-${pad(expenseViewMonth + 1)}`;
+  const items = state.expenses.filter((item) => item.date?.startsWith(prefix)).sort((a, b) => b.date.localeCompare(a.date) || sortByCreatedDesc(a, b));
+  const total = items.reduce((sum, item) => sum + Number(item.amountCents || 0), 0);
+  document.getElementById('expense-month-total').textContent = formatMoney(total);
+  document.getElementById('expense-month-count').textContent = `${items.length} 筆開支`;
+  const previous = new Date(expenseViewYear, expenseViewMonth - 1, 1);
+  const previousPrefix = `${previous.getFullYear()}-${pad(previous.getMonth() + 1)}`;
+  const previousTotal = state.expenses.filter((item) => item.date?.startsWith(previousPrefix)).reduce((sum, item) => sum + Number(item.amountCents || 0), 0);
+  const change = document.getElementById('expense-month-change');
+  change.className = 'expense-change';
+  if (!previousTotal) change.textContent = total ? '上月未有記錄' : '';
+  else {
+    const difference = total - previousTotal;
+    const percentage = Math.round(Math.abs(difference) / previousTotal * 100);
+    change.textContent = difference === 0 ? '與上月相同' : `較上月${difference > 0 ? '多' : '少'} ${percentage}%`;
+    change.classList.add(difference > 0 ? 'increase' : 'decrease');
+  }
+  const today = new Date();
+  document.getElementById('expense-current-month').hidden = expenseViewYear === today.getFullYear() && expenseViewMonth === today.getMonth();
+  const totals = items.reduce((result, item) => { result[item.category] = (result[item.category] || 0) + Number(item.amountCents || 0); return result; }, {});
+  document.getElementById('expense-breakdown').innerHTML = Object.entries(totals).sort((a,b) => b[1] - a[1]).map(([category, cents]) => {
+    const meta = EXPENSE_META[category] || EXPENSE_META.other;
+    const share = total ? Math.round(cents / total * 100) : 0;
+    return `<span><b>${meta[1]} ${meta[0]}</b><small>${formatMoney(cents)} · ${share}%</small><i aria-hidden="true"><u style="width:${share}%"></u></i></span>`;
+  }).join('');
+  list.innerHTML = items.length ? items.map((item) => {
+    const meta = EXPENSE_META[item.category] || EXPENSE_META.other;
+    const detail = [formatChineseDate(item.date), meta[0], item.paidBy ? `${item.paidBy}付款` : '', item.note || ''].filter(Boolean).join(' · ');
+    return `<article class="expense-item"><span class="expense-icon">${meta[1]}</span><div class="expense-main"><strong>${escapeHTML(item.title)}</strong><small>${escapeHTML(detail)}</small></div><b class="expense-amount">${formatMoney(item.amountCents)}</b><div class="row-actions"><button class="mini-icon-button" type="button" data-expense-action="edit" data-id="${escapeAttr(item.id)}" aria-label="修改"><svg><use href="#i-edit"></use></svg></button><button class="mini-icon-button danger" type="button" data-expense-action="delete" data-id="${escapeAttr(item.id)}" aria-label="刪除"><svg><use href="#i-trash"></use></svg></button></div></article>`;
+  }).join('') : `<div class="empty-state"><span class="emoji">🧾</span><strong>這個月未有開支</strong><span>記下第一筆家庭開支</span></div>`;
+}
+
+function formatMoney(cents) { return new Intl.NumberFormat('zh-HK', { style: 'currency', currency: 'HKD', currencyDisplay: 'narrowSymbol' }).format(Number(cents || 0) / 100); }
+function formatMoneyCompact(cents) { return new Intl.NumberFormat('zh-HK', { style: 'currency', currency: 'HKD', currencyDisplay: 'narrowSymbol', maximumFractionDigits: 0 }).format(Number(cents || 0) / 100); }
+
 let confirmResolver = null;
 function bindConfirmUI() {
   document.querySelectorAll('[data-confirm-value]').forEach((button) => button.addEventListener('click', () => {
@@ -1071,7 +1197,7 @@ function bindBackupUI() {
 }
 
 function renderAll() {
-  renderTodos(); renderCalendar(); renderContacts(); renderHomeSummary(); renderAuthState(); renderMemberPanel(); renderConnectionState(); renderAnnouncements();
+  renderTodos(); renderCalendar(); renderContacts(); renderExpenses(); renderHomeSummary(); renderAuthState(); renderMemberPanel(); renderConnectionState(); renderAnnouncements();
 }
 
 function renderHomeSummary() {
@@ -1084,6 +1210,8 @@ function renderHomeSummary() {
     document.getElementById('home-todo-note').textContent = authUser ? '等待批准' : '登入後顯示';
     document.getElementById('home-event-count').textContent = '—';
     document.getElementById('home-next-event').textContent = authUser ? '等待批准' : '登入後顯示';
+    document.getElementById('home-expense-total').textContent = 'HK$—';
+    document.getElementById('home-expense-note').textContent = authUser ? '等待批准' : '登入後顯示';
     agenda.innerHTML = homeLockedPreview(authUser ? '等待批准後顯示家庭行程' : '登入後顯示家庭行程');
     tasks.innerHTML = homeLockedPreview(authUser ? '等待批准後顯示家庭清單' : '登入後顯示家庭清單');
     notes.innerHTML = homeLockedPreview(authUser ? '等待批准後顯示家庭筆記' : '登入後顯示家庭筆記');
@@ -1099,6 +1227,10 @@ function renderHomeSummary() {
   document.getElementById('home-event-count').textContent = todaysEvents.length;
   const next = todaysEvents.find((e) => !e.time || `${today}T${e.time}` >= localDateTimeKey(new Date())) || todaysEvents[0];
   document.getElementById('home-next-event').textContent = next ? `${next.time ? next.time + ' ' : ''}${next.title}` : '今日未有活動';
+  const monthExpenses = state.expenses.filter((item) => item.date?.startsWith(today.slice(0, 7)));
+  const monthExpenseTotal = monthExpenses.reduce((sum, item) => sum + Number(item.amountCents || 0), 0);
+  document.getElementById('home-expense-total').textContent = formatMoneyCompact(monthExpenseTotal);
+  document.getElementById('home-expense-note').textContent = monthExpenses.length ? `${monthExpenses.length} 筆記錄` : '暫未有記錄';
   const upcoming = upcomingEventOccurrences(3);
   agenda.innerHTML = upcoming.length ? upcoming.map((event) => {
     const meta = EVENT_META[event.category] || EVENT_META.other;
@@ -1204,7 +1336,7 @@ function formatETA(date) { const mins = Math.max(0, Math.round((date.getTime() -
 function weatherEmoji(iconNo) { const n = Number(iconNo); if ([50,51].includes(n)) return '☀️'; if ([52,53].includes(n)) return '🌤️'; if ([54,55,56,57,58,59,60,61,62,63,64].includes(n)) return '☁️'; if ([65,66,67,68,69,70,71,72,73,74,75,76,77].includes(n)) return '🌧️'; if ([80,81,82].includes(n)) return '🌫️'; if ([90,91,92,93].includes(n)) return '🌙'; return '🌤️'; }
 
 function setPrivateButtonsEnabled(enabled) {
-  ['add-todo-top','add-todo-fab','add-event-top','add-event-inline','add-contact-top','export-data','import-data'].forEach((id) => {
+  ['add-todo-top','add-todo-fab','add-event-top','add-event-inline','add-contact-top','add-expense-top','add-expense-fab','export-data','import-data'].forEach((id) => {
     const el = document.getElementById(id); if (!el) return; if ('disabled' in el) el.disabled = !enabled; el.classList.toggle('disabled', !enabled);
   });
 }

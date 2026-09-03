@@ -13,7 +13,7 @@
   <link rel="icon" href="assets/icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="assets/icon-180.png" />
   <link rel="manifest" href="manifest.webmanifest" />
-  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="styles.css?v=17" />
 </head>
 <body>
   <svg class="svg-sprite" aria-hidden="true">
@@ -47,6 +47,7 @@
     <symbol id="i-spark" viewBox="0 0 24 24"><path d="m13 2-8 12h7l-1 8 8-12h-7l1-8Z"/></symbol>
     <symbol id="i-note" viewBox="0 0 24 24"><path d="M6 3h12a2 2 0 0 1 2 2v10l-6 6H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/><path d="M14 21v-6h6M8 8h8M8 12h5"/></symbol>
     <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 16h12l-1.5-2V9a4.5 4.5 0 0 0-9 0v5L6 16ZM10 20h4"/></symbol>
+    <symbol id="i-wallet" viewBox="0 0 24 24"><path d="M4 7.5h15a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-13a2 2 0 0 1 2-2h12v4"/><path d="M16 12h5v4h-5a2 2 0 0 1 0-4Z"/></symbol>
   </svg>
 
   <main class="app-shell">
@@ -107,6 +108,12 @@
           <strong><span id="home-event-count">0</span> 項</strong>
           <small id="home-next-event">今日未有活動</small>
         </button>
+        <button class="summary-card expense-home-card" type="button" data-go="expenses">
+          <span class="summary-icon expense-icon-home"><svg><use href="#i-wallet"></use></svg></span>
+          <span class="summary-label">本月開支</span>
+          <strong id="home-expense-total">HK$0</strong>
+          <small id="home-expense-note">暫未有記錄</small>
+        </button>
       </div>
 
       <section class="quick-section" aria-labelledby="quick-title">
@@ -119,6 +126,7 @@
           <button type="button" data-quick-action="contact"><span class="quick-icon orange"><svg><use href="#i-phone"></use></svg></span><span><strong>實用資料</strong><small>電話與地址</small></span></button>
           <button type="button" data-quick-action="note"><span class="quick-icon blue"><svg><use href="#i-note"></use></svg></span><span><strong>快速筆記</strong><small>記下家庭事項</small></span></button>
           <button type="button" data-quick-action="reminder"><span class="quick-icon red"><svg><use href="#i-bell"></use></svg></span><span><strong>新增提醒</strong><small>續期與週期事項</small></span></button>
+          <button type="button" data-quick-action="expense"><span class="quick-icon expense-quick"><svg><use href="#i-wallet"></use></svg></span><span><strong>記錄開支</strong><small>家庭日常使費</small></span></button>
         </div>
       </section>
 
@@ -212,6 +220,25 @@
       <div id="contact-groups" class="contact-groups"></div>
     </section>
 
+    <section id="page-expenses" class="page" data-page="expenses">
+      <header class="page-header expense-header">
+        <div><p class="eyebrow">一家人清楚掌握日常開支</p><h1>家庭開支</h1></div>
+        <button id="add-expense-top" class="header-action expense-action" type="button"><svg><use href="#i-plus"></use></svg><span>記一筆</span></button>
+      </header>
+      <div class="announcement-slot" data-announcement-slot></div>
+      <article class="card expense-summary">
+        <div class="month-nav">
+          <button id="prev-expense-month" class="icon-button" type="button" aria-label="上個月"><svg><use href="#i-chevron-left"></use></svg></button>
+          <div><p id="expense-month-title"></p><strong id="expense-month-total">HK$0.00</strong><small id="expense-month-count">0 筆開支</small><small id="expense-month-change" class="expense-change"></small></div>
+          <button id="next-expense-month" class="icon-button" type="button" aria-label="下個月"><svg><use href="#i-chevron-right"></use></svg></button>
+        </div>
+        <button id="expense-current-month" class="text-button expense-current-month" type="button">返回本月</button>
+        <div id="expense-breakdown" class="expense-breakdown" aria-label="分類開支"></div>
+      </article>
+      <div id="expense-list" class="stack-list" aria-live="polite"></div>
+      <button id="add-expense-fab" class="fab expense-fab" type="button" aria-label="新增開支"><svg><use href="#i-plus"></use></svg></button>
+    </section>
+
     <section id="page-settings" class="page" data-page="settings">
       <header class="page-header blue">
         <div>
@@ -293,6 +320,7 @@
       <button class="nav-item active" type="button" data-nav="home"><svg><use href="#i-home"></use></svg><span>首頁</span></button>
       <button class="nav-item" type="button" data-nav="todos"><svg><use href="#i-check"></use></svg><span>清單</span></button>
       <button class="nav-item" type="button" data-nav="calendar"><svg><use href="#i-calendar"></use></svg><span>日曆</span></button>
+      <button class="nav-item" type="button" data-nav="expenses"><svg><use href="#i-wallet"></use></svg><span>開支</span></button>
       <button class="nav-item" type="button" data-nav="info"><svg><use href="#i-info"></use></svg><span>資料</span></button>
       <button class="nav-item" type="button" data-nav="settings"><svg><use href="#i-settings"></use></svg><span>設定</span></button>
     </nav>
@@ -305,6 +333,19 @@
       <label>內容<input id="todo-text" maxlength="80" placeholder="例如：買牛奶" required /></label>
       <label>類別<select id="todo-category"><option value="shopping">購物</option><option value="todo">待辦</option></select></label>
       <div class="dialog-actions"><button class="secondary-button" type="button" data-dialog-cancel>取消</button><button id="save-todo" class="primary-button" value="default" type="button">儲存</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="expense-dialog" class="app-dialog">
+    <form method="dialog">
+      <div class="dialog-head"><h2 id="expense-dialog-title">新增家庭開支</h2><button class="dialog-close" type="button" data-dialog-cancel aria-label="取消">×</button></div>
+      <input type="hidden" id="expense-id" />
+      <label>項目<input id="expense-title" maxlength="80" placeholder="例如：超市買餸" required /></label>
+      <div class="two-col"><label>金額（HK$）<input id="expense-amount" type="number" inputmode="decimal" min="0.01" max="9999999.99" step="0.01" placeholder="0.00" required /></label><label>日期<input id="expense-date" type="date" required /></label></div>
+      <label>分類<select id="expense-category"><option value="groceries">買餸</option><option value="dining">飲食</option><option value="transport">交通</option><option value="home">家居</option><option value="utilities">賬單</option><option value="health">醫療</option><option value="education">教育</option><option value="leisure">消閒</option><option value="other">其他</option></select></label>
+      <label>付款人<input id="expense-paid-by" maxlength="40" placeholder="例如：爸爸（可選）" /></label>
+      <label>備註<textarea id="expense-note" maxlength="300" rows="3" placeholder="可選"></textarea></label>
+      <div class="dialog-actions"><button class="secondary-button" type="button" data-dialog-cancel>取消</button><button id="save-expense" class="primary-button expense-action" value="default" type="button">儲存</button></div>
     </form>
   </dialog>
 
@@ -371,6 +412,6 @@
   </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script type="module" src="app.js"></script>
+  <script type="module" src="app.js?v=17"></script>
 </body>
 </html>

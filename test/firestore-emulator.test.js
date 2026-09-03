@@ -18,6 +18,7 @@ const privateShapes = {
   usefulInfo: () => ({ category: 'other', name: '資料', phone: '', address: '', note: '', sortOrder: 0, createdAt: now, updatedAt: now }),
   notes: () => ({ title: '筆記', content: '', createdBy: 'member', createdAt: now, updatedAt: now }),
   reminders: () => ({ title: '提醒', dueDate: '2027-01-01', repeat: 'none', leadDays: 0, createdBy: 'member', createdAt: now, updatedAt: now }),
+  expenses: () => ({ title: '超市', amountCents: 12850, currency: 'HKD', date: '2026-08-27', category: 'groceries', paidBy: '媽媽', note: '', createdBy: 'member', createdAt: now, updatedAt: now }),
 };
 
 async function seed() {

@@ -138,6 +138,22 @@ service cloud.firestore {
           && request.resource.data.leadDays <= 365
           && validAudit(request.resource.data);
       }
+
+      match /expenses/{expenseId} {
+        allow read, delete: if isApproved(familyId);
+        allow create, update: if isApproved(familyId)
+          && request.resource.data.keys().hasOnly(['title', 'amountCents', 'currency', 'date', 'category', 'paidBy', 'note', 'createdBy', 'createdAt', 'updatedAt'])
+          && validText(request.resource.data.title, 200)
+          && request.resource.data.amountCents is int
+          && request.resource.data.amountCents >= 1
+          && request.resource.data.amountCents <= 999999999
+          && request.resource.data.currency == 'HKD'
+          && validText(request.resource.data.date, 10)
+          && request.resource.data.category in ['groceries', 'dining', 'transport', 'home', 'utilities', 'health', 'education', 'leisure', 'other']
+          && validOptionalText(request.resource.data.paidBy, 80)
+          && validOptionalText(request.resource.data.note, 1000)
+          && validAudit(request.resource.data);
+      }
     }
   }
 }

@@ -6,7 +6,7 @@ Use this checklist for every release. Application publishing and Firestore Rules
 
 - Confirm the intended branch and review `git status` for unrelated work.
 - Run `npm test` and confirm every test passes.
-- Start a local static server and smoke-test sign-in states, lists, calendar recurrence, contacts, notes, reminders, backup export/import, and responsive navigation.
+- Start a local static server and smoke-test sign-in states, lists, calendar recurrence, contacts, notes, reminders, expenses, backup export/import, and responsive navigation.
 - Confirm a backup import explains that it **adds** records to existing cloud data. It does not replace or deduplicate records and may therefore create duplicates.
 - Review `firestore.rules` locally. Local presence does not prove that these rules are active in Firebase.
 - Confirm no credentials, service-account files, private household data, or generated backup JSON files are included.

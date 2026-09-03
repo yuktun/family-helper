@@ -5,7 +5,7 @@ import { readFile } from 'node:fs/promises';
 const rules = await readFile(new URL('../firestore.rules', import.meta.url), 'utf8');
 
 test('private collections remain gated by approved family membership', () => {
-  for (const collection of ['todos', 'calendarEvents', 'usefulInfo', 'notes', 'reminders']) {
+  for (const collection of ['todos', 'calendarEvents', 'usefulInfo', 'notes', 'reminders', 'expenses']) {
     const block = rules.match(new RegExp(`match /${collection}/\\{[^}]+\\} \\{([\\s\\S]*?)(?=\\n      \\}|$)`))?.[1] || '';
     assert.match(block, /isApproved\(familyId\)/, `${collection} must require approval`);
   }
@@ -15,6 +15,8 @@ test('private writes have field allowlists and value validation', () => {
   assert.equal((rules.match(/keys\(\)\.hasOnly/g) || []).length >= 7, true);
   assert.match(rules, /request\.resource\.data\.repeat in \['none', 'weekly', 'monthly', 'yearly'\]/);
   assert.match(rules, /request\.resource\.data\.leadDays <= 365/);
+  assert.match(rules, /request\.resource\.data\.amountCents <= 999999999/);
+  assert.match(rules, /request\.resource\.data\.currency == 'HKD'/);
 });
 
 test('announcements remain public-read and admin-write only', () => {

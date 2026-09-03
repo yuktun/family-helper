@@ -1,14 +1,15 @@
-export const BACKUP_VERSION = 3;
+export const BACKUP_VERSION = 4;
 export const MAX_BACKUP_BYTES = 2 * 1024 * 1024;
 export const MAX_BACKUP_RECORDS = 400;
 
-const COLLECTIONS = ['todos', 'events', 'contacts', 'notes', 'reminders'];
+const COLLECTIONS = ['todos', 'events', 'contacts', 'notes', 'reminders', 'expenses'];
 const ENUMS = {
   todoCategory: ['todo', 'shopping'],
   eventCategory: ['family', 'school', 'medical', 'car', 'bill', 'birthday', 'other'],
   eventRepeat: ['none', 'weekly', 'monthly', 'yearly'],
   infoCategory: ['estate', 'medical', 'company', 'emergency', 'other'],
   reminderRepeat: ['none', 'monthly', 'yearly'],
+  expenseCategory: ['groceries', 'dining', 'transport', 'home', 'utilities', 'health', 'education', 'leisure', 'other'],
 };
 
 function fail(message) { throw new Error(message); }
@@ -44,12 +45,13 @@ export function createBackup(data, exportedAt = new Date().toISOString()) {
 export function validateBackup(parsed, byteLength = 0) {
   if (byteLength > MAX_BACKUP_BYTES) fail('Backup file is too large');
   const envelope = object(parsed, 'Backup');
-  if (envelope.version !== BACKUP_VERSION) fail('Backup version is not supported');
+  if (![3, BACKUP_VERSION].includes(envelope.version)) fail('Backup version is not supported');
   if (typeof envelope.exportedAt !== 'string' || Number.isNaN(Date.parse(envelope.exportedAt))) fail('Backup export date is invalid');
   const data = object(envelope.data, 'Backup data');
+  const required = envelope.version === 3 ? COLLECTIONS.filter((key) => key !== 'expenses') : COLLECTIONS;
   const keys = Object.keys(data);
-  if (keys.some((key) => !COLLECTIONS.includes(key)) || COLLECTIONS.some((key) => !Array.isArray(data[key]))) fail('Backup collections are invalid');
-  const count = COLLECTIONS.reduce((sum, key) => sum + data[key].length, 0);
+  if (keys.some((key) => !COLLECTIONS.includes(key)) || required.some((key) => !Array.isArray(data[key]))) fail('Backup collections are invalid');
+  const count = COLLECTIONS.reduce((sum, key) => sum + (data[key]?.length || 0), 0);
   if (count > MAX_BACKUP_RECORDS) fail('Backup has too many records');
 
   return {
@@ -77,6 +79,13 @@ export function validateBackup(parsed, byteLength = 0) {
       const leadDays = Number(item.leadDays ?? 0);
       if (!Number.isInteger(leadDays) || leadDays < 0 || leadDays > 365) fail(`reminders[${i}].leadDays is invalid`);
       return { title: text(item.title, `reminders[${i}].title`, 200, { required: true }), dueDate: date(item.dueDate, `reminders[${i}].dueDate`), repeat: choice(item.repeat, `reminders[${i}].repeat`, ENUMS.reminderRepeat, 'none'), leadDays };
+    }),
+    expenses: (data.expenses || []).map((raw, i) => {
+      const item = object(raw, `expenses[${i}]`);
+      const amountCents = Number(item.amountCents);
+      if (!Number.isInteger(amountCents) || amountCents < 1 || amountCents > 999999999) fail(`expenses[${i}].amountCents is invalid`);
+      if (item.currency !== 'HKD') fail(`expenses[${i}].currency is not supported`);
+      return { title: text(item.title, `expenses[${i}].title`, 200, { required: true }), amountCents, currency: 'HKD', date: date(item.date, `expenses[${i}].date`), category: choice(item.category, `expenses[${i}].category`, ENUMS.expenseCategory, 'other'), paidBy: text(item.paidBy ?? '', `expenses[${i}].paidBy`, 80), note: text(item.note ?? '', `expenses[${i}].note`, 1000) };
     }),
   };
 }

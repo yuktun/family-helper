@@ -10,7 +10,7 @@ const rulesApi = require('firebase-tools/lib/gcp/rules');
 const PROJECT_ID = 'family-helpers';
 const DATABASE_ID = '(default)';
 const FAMILY_ID = 'home';
-const COLLECTIONS = ['todos', 'calendarEvents', 'usefulInfo', 'notes', 'reminders'];
+const COLLECTIONS = ['todos', 'calendarEvents', 'usefulInfo', 'notes', 'reminders', 'expenses'];
 
 if (process.env.FIRESTORE_EMULATOR_HOST) {
   throw new Error('Audit stopped: FIRESTORE_EMULATOR_HOST is set.');
@@ -64,6 +64,15 @@ const specs = {
       createdAt: type('timestamp'), updatedAt: type('timestamp'),
     },
     semantic: { dueDate: isoDate },
+  },
+  expenses: {
+    fields: ['title', 'amountCents', 'currency', 'date', 'category', 'paidBy', 'note', 'createdBy', 'createdAt', 'updatedAt'],
+    checks: {
+      title: requiredText(200), amountCents: integerRange(1, 999999999), currency: enumText(['HKD']), date: requiredText(10),
+      category: enumText(['groceries', 'dining', 'transport', 'home', 'utilities', 'health', 'education', 'leisure', 'other']),
+      paidBy: text(80), note: text(1000), createdBy: requiredText(Infinity), createdAt: type('timestamp'), updatedAt: type('timestamp'),
+    },
+    semantic: { date: isoDate },
   },
 };
 
