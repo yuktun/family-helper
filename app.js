@@ -678,7 +678,7 @@ function renderTodos() {
     holder.innerHTML = lockedHTML(authUser ? '等待管理員批准' : '登入後與家人共享清單');
     return;
   }
-  const filtered = state.todos.filter((item) => todoFilter === 'all' || item.category === todoFilter);
+  const filtered = state.todos.filter((item) => !item.completed && (todoFilter === 'all' || item.category === todoFilter));
   if (!filtered.length) {
     holder.innerHTML = `<div class="empty-state"><span class="emoji">${todoFilter === 'shopping' ? '🛒' : '✅'}</span><strong>暫時未有項目</strong><span>按「新增」加入家庭清單。</span></div>`;
     return;

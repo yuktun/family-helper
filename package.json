@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test test/auth-utils.test.js test/backup-utils.test.js test/firestore-rules.test.js test/migration-security.test.js",
+    "test": "node --test test/auth-utils.test.js test/backup-utils.test.js test/firestore-rules.test.js test/migration-security.test.js test/todo-visibility.test.js",
     "test:firestore": "node scripts/run-firestore-emulator-tests.mjs",
     "test:all": "npm test && npm run test:firestore",
     "inspect:legacy-categories": "node scripts/inspect-legacy-categories.mjs",
