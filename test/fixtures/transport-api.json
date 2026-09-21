@@ -1,0 +1,11 @@
+{
+  "kmb": {"data":[{"co":"KMB","route":"87D","dir":"O","service_type":1,"dest_tc":"紅磡站","eta":"2026-09-21T12:10:00+08:00","rmk_tc":""}]},
+  "ctb": {"data":[{"route":"681","dir":"I","dest":"中環","eta":"2026-09-21T12:12:00+08:00","rmk":"正常","seq":1}]},
+  "gmb": {"data":[{"route_id":2001,"route_seq":2,"stop_seq":4,"eta":[{"timestamp":"2026-09-21T12:08:00+08:00","remarks_tc":"尾班車"}]}]},
+  "mtr": {"isdelay":"N","data":{"TML-MOS":{"sys_time":"2026-09-21 12:00:00","UP":[{"seq":"1","dest":"WKS","plat":"1","ttnt":"2","time":"2026-09-21 12:02:00","valid":"Y"}],"DOWN":[{"seq":"1","dest":"TUM","plat":"2","ttnt":"4","time":"2026-09-21 12:04:00","valid":"Y"}]}}},
+  "compactCatalog": {"ctb":[["001950","馬鞍山市中心",22.42413,114.23169]],"gmb":[["G100","馬鞍山站",22.424,114.232]],"gmbr":[[2001,2,"69","馬鞍山"]]},
+  "ctbStops": {"data":[{"stop":"001950","name_tc":"馬鞍山市中心","name_en":"Ma On Shan Town Centre","lat":"22.42413","long":"114.23169"}]},
+  "gmbRouteIndex": {"data":{"routes":{"NT":[{"route_id":2001,"region":"NT"}]}}},
+  "gmbRoute": {"data":{"route_id":2001,"directions":[{"route_seq":2,"route_code":"69","orig_tc":"海柏花園","dest_tc":"馬鞍山"}]}},
+  "gmbStops": {"data":{"route_stops":[{"stop_id":"G100","name_tc":"馬鞍山站","latitude":22.424,"longitude":114.232,"stop_seq":4}]}}
+}

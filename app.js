@@ -21,9 +21,11 @@ import {
   serverTimestamp,
   enableIndexedDbPersistence,
   writeBatch,
+  runTransaction,
 } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 import { createBackup, validateBackup, MAX_BACKUP_BYTES } from './backup-utils.js';
 import { popupLoginAction } from './auth-utils.js';
+import { createTransportController } from './transport-controller.js';
 
 const firebaseConfig = {
   apiKey: 'AIzaSyB7oF8M9bPBCsdO6FGjIUezIfvjKmd0bOU',
@@ -41,8 +43,6 @@ const LEGACY_STORAGE_KEY = 'family-helper-v1';
 const MIGRATION_KEY = 'family-helper-v2-migrated';
 const THEME_PREFERENCE_KEY = 'family-helper-theme-preference';
 const DASHBOARD_PREFERENCE_KEY = 'family-helper-dashboard-preference';
-const KMB_BASE = 'https://data.etabus.gov.hk/v1/transport/kmb';
-const CTB_BASE = 'https://rt.data.gov.hk/v1/transport/citybus-nwfb';
 const HKO_CURRENT = 'https://data.weather.gov.hk/weatherAPI/opendata/weather.php?dataType=rhrread&lang=tc';
 
 // Human-readable stop code -> KMB Open Data 16-character stop ID.
@@ -56,7 +56,6 @@ const DEFAULT_ROUTES = [
   { route: '89P', dest: '藍田站', stopCode: 'MA310', stopId: '76E8D8C73E0B8096', bound: 'O', serviceType: '1' },
 ];
 let dashboardPreferences = readDashboardPreferences();
-const activeRoutes = () => DEFAULT_ROUTES.filter((route) => dashboardPreferences.routes.includes(route.route));
 
 const CATEGORY_META = {
   estate: { label: '屋苑', icon: 'building', cls: 'estate' },
@@ -114,7 +113,6 @@ let viewMonth = now.getMonth();
 let selectedDate = toISODate(now);
 let expenseViewYear = now.getFullYear();
 let expenseViewMonth = now.getMonth();
-let busTimer = null;
 let toastTimer = null;
 let networkOnline = navigator.onLine;
 const systemDarkMode = typeof window.matchMedia === 'function' ? window.matchMedia('(prefers-color-scheme: dark)') : { matches: false };
@@ -122,6 +120,64 @@ let themePreference = readThemePreference();
 
 const privateAllowed = () => Boolean(authUser && member?.status === 'approved');
 const isAdmin = () => privateAllowed() && member?.role === 'admin';
+const transportSnapshots = new Map();
+
+const transportController = createTransportController({
+  subscribe(uid, next, error) {
+    const metadataRef = doc(membersRef, uid, 'transport', 'preferences');
+    const refs = {
+      routes: collection(metadataRef, 'routes'),
+      stops: collection(metadataRef, 'stops'),
+      mtr: collection(metadataRef, 'mtr'),
+    };
+    const value = { metadata: null, routes: [], stops: [], mtr: [] };
+    const ready = new Set();
+    const publish = (key) => {
+      ready.add(key);
+      if (ready.size !== 4) return;
+      const aggregate = { ...(value.metadata || {}), routes: value.routes, stops: value.stops, mtr: value.mtr };
+      transportSnapshots.set(uid, aggregate);
+      next(aggregate);
+    };
+    const unsubs = [
+      onSnapshot(metadataRef, (snapshot) => { value.metadata = snapshot.exists() ? snapshot.data() : null; publish('metadata'); }, error),
+      ...Object.entries(refs).map(([key, ref]) => onSnapshot(ref, (snapshot) => {
+        value[key] = snapshot.docs.map((entry) => ({ ...entry.data(), id: entry.id }));
+        publish(key);
+      }, error)),
+    ];
+    return () => { unsubs.forEach((stop) => stop()); transportSnapshots.delete(uid); };
+  },
+  async mutate(uid, transform) {
+    const ref = doc(membersRef, uid, 'transport', 'preferences');
+    const remote = transportSnapshots.get(uid) || null;
+    const prepared = transform(remote);
+    return runTransaction(db, async (transaction) => {
+      const snapshot = await transaction.get(ref);
+      const currentRevision = Number(snapshot.data()?.revision) || 0;
+      if (currentRevision !== (Number(remote?.revision) || 0)) throw new Error('transport-preference-conflict');
+      const revision = currentRevision + 1;
+      const payload = { schemaVersion: 1, revision, interval: prepared.interval, showOnHome: prepared.showOnHome, updatedAt: serverTimestamp() };
+      if (!snapshot.exists()) payload.createdAt = serverTimestamp();
+      else payload.createdAt = snapshot.data().createdAt;
+      transaction.set(ref, payload);
+      for (const key of ['routes', 'stops', 'mtr']) {
+        const previous = new Map((remote?.[key] || []).map((item) => [item.id, item]));
+        const nextItems = new Map((prepared[key] || []).map((item) => [item.id, item]));
+        const itemsRef = collection(ref, key);
+        for (const id of previous.keys()) if (!nextItems.has(id)) transaction.delete(doc(itemsRef, id));
+        for (const [id, item] of nextItems) transaction.set(doc(itemsRef, id), item);
+      }
+      const result = { ...payload, routes: prepared.routes, stops: prepared.stops, mtr: prepared.mtr, createdAt: snapshot.data()?.createdAt, updatedAt: new Date() };
+      transportSnapshots.set(uid, result);
+      return result;
+    });
+  },
+  legacyRoutes: () => dashboardPreferences.routes.map((routeName) => DEFAULT_ROUTES.find((route) => route.route === routeName)).filter(Boolean).map((route) => ({ ...route, operator: 'KMB', direction: route.bound, stopName: route.stopCode, destination: route.dest })),
+  privateAllowed,
+  showToast,
+  switchPage,
+});
 
 window.addEventListener('DOMContentLoaded', init);
 
@@ -143,18 +199,12 @@ function init() {
   bindRemindersUI();
   bindExpensesUI();
   bindConfirmUI();
+  transportController.bind();
   updateDateAndGreeting();
   clockTimer = window.setInterval(updateDateAndGreeting, 30_000);
   renderAll();
   loadWeather();
-  loadBusETA();
   startAnnouncementListener();
-  busTimer = window.setInterval(() => {
-    if (!document.hidden) loadBusETA({ quiet: true });
-  }, 60_000);
-  document.addEventListener('visibilitychange', () => {
-    if (!document.hidden && currentPage === 'home') loadBusETA({ quiet: true });
-  });
   window.addEventListener('online', () => { networkOnline = true; renderConnectionState(); });
   window.addEventListener('offline', () => { networkOnline = false; renderConnectionState(); });
   onAuthStateChanged(auth, handleAuthState, (error) => { console.error('Auth state:', error); showToast('登入狀態讀取失敗'); });
@@ -187,7 +237,6 @@ function saveDashboardPreferences() {
   try { localStorage.setItem(DASHBOARD_PREFERENCE_KEY, JSON.stringify(dashboardPreferences)); } catch {}
   renderDashboardSettings();
   renderHomeSummary();
-  loadBusETA();
 }
 
 function bindThemeUI() {
@@ -247,10 +296,10 @@ function switchPage(page) {
   if (page === 'settings') { renderAuthState(); renderMemberPanel(); renderAnnouncements(); }
   if (page === 'todos') renderTodos();
   if (page === 'expenses') renderExpenses();
+  transportController.setPage(page);
 }
 
 function bindHomeUI() {
-  document.getElementById('refresh-bus').addEventListener('click', () => loadBusETA());
   document.querySelectorAll('[data-quick-action]').forEach((button) => button.addEventListener('click', () => {
     const action = button.dataset.quickAction;
     if (action === 'todo') openTodoDialog();
@@ -264,24 +313,19 @@ function bindHomeUI() {
 
 function bindDashboardSettings() {
   document.querySelectorAll('[data-module-toggle]').forEach((input) => input.addEventListener('change', () => {
+    if (input.dataset.moduleToggle === 'transport') {
+      transportController.setShowOnHome(input.checked);
+      return;
+    }
     dashboardPreferences.modules[input.dataset.moduleToggle] = input.checked;
     saveDashboardPreferences();
   }));
-  document.getElementById('route-settings').addEventListener('change', (event) => {
-    const input = event.target.closest('[data-route-toggle]');
-    if (!input) return;
-    const enabled = [...document.querySelectorAll('[data-route-toggle]:checked')].map((item) => item.value);
-    if (!enabled.length) { input.checked = true; return showToast('最少保留一條巴士路線'); }
-    dashboardPreferences.routes = enabled;
-    saveDashboardPreferences();
-  });
   renderDashboardSettings();
 }
 
 function renderDashboardSettings() {
   document.querySelectorAll('[data-home-module]').forEach((module) => { module.hidden = dashboardPreferences.modules[module.dataset.homeModule] === false; });
-  document.querySelectorAll('[data-module-toggle]').forEach((input) => { input.checked = dashboardPreferences.modules[input.dataset.moduleToggle] !== false; });
-  document.getElementById('route-settings').innerHTML = DEFAULT_ROUTES.map((route) => `<label><span><strong>${escapeHTML(route.route)} · ${escapeHTML(route.dest)}</strong><small>站 ${escapeHTML(route.stopCode)}</small></span><input type="checkbox" value="${escapeAttr(route.route)}" data-route-toggle ${dashboardPreferences.routes.includes(route.route) ? 'checked' : ''} /></label>`).join('');
+  document.querySelectorAll('[data-module-toggle]').forEach((input) => { input.checked = input.dataset.moduleToggle === 'transport' ? transportController.getShowOnHome() : dashboardPreferences.modules[input.dataset.moduleToggle] !== false; });
 }
 
 function bindAnnouncementUI() {
@@ -389,6 +433,7 @@ async function handleAuthState(user) {
   stopMemberListeners();
   stopAdminPanelListeners();
   authUser = user;
+  transportController.setIdentity(user, false);
   member = null;
   pendingRequest = null;
   state = { todos: [], events: [], contacts: [], notes: [], reminders: [], expenses: [] };
@@ -436,7 +481,9 @@ async function observeMembership(user) {
     member = snap.exists() ? { id: snap.id, ...snap.data() } : null;
     if (member?.status === 'approved') {
       await startSharedListeners();
+      transportController.setIdentity(user, true);
     } else {
+      transportController.setIdentity(user, false);
       stopSharedListeners();
       state = { todos: [], events: [], contacts: [], notes: [], reminders: [], expenses: [] };
       if ((user.email || '').toLowerCase() !== ADMIN_EMAIL.toLowerCase()) await ensurePendingRequest(user);
@@ -1272,67 +1319,6 @@ async function loadWeather() {
   } catch { tempEl.textContent = '--°C'; noteEl.textContent = '暫時未能取得天氣'; }
 }
 
-async function loadBusETA({ quiet = false } = {}) {
-  const updated = document.getElementById('bus-updated'); const dot = document.getElementById('bus-status-dot');
-  if (!quiet) { dot.className = 'status-dot loading'; updated.textContent = '正在更新巴士資料…'; renderBusSkeleton(); }
-  const results = await Promise.all(activeRoutes().map(loadOneRoute));
-  renderBusResults(results);
-  const successful = results.some((r) => !r.error);
-  const dt = new Date();
-  updated.textContent = successful ? `資料更新：${pad(dt.getHours())}:${pad(dt.getMinutes())}` : '暫時未能取得實時資料，請稍後再試';
-  dot.className = successful ? 'status-dot' : 'status-dot error';
-}
-
-async function loadOneRoute(config) {
-  const [kmbResult, citybusResult] = await Promise.all([
-    loadKmbEtas(config),
-    config.jointCitybus ? loadCitybusEtas(config) : Promise.resolve({ etas: [], failed: false }),
-  ]);
-  const etas = dedupeEtas([...kmbResult.etas, ...citybusResult.etas]).sort((a,b) => a.etaDate - b.etaDate).slice(0,3);
-  return { ...config, etas, error: kmbResult.failed && citybusResult.failed };
-}
-
-async function loadKmbEtas(config) {
-  try {
-    const etaResp = await fetchWithTimeout(`${KMB_BASE}/eta/${encodeURIComponent(config.stopId)}/${encodeURIComponent(config.route)}/${encodeURIComponent(config.serviceType)}`, 9000);
-    if (!etaResp.ok) throw new Error(`ETA HTTP ${etaResp.status}`);
-    const etaData = (await etaResp.json()).data || [];
-    const etas = etaData.filter((x) => x.eta && (!x.dir || x.dir === config.bound)).map((x) => ({ ...x, source: 'KMB', etaDate: new Date(x.eta) })).filter(validFutureEta);
-    return { etas, failed: false };
-  } catch (error) {
-    console.warn(`KMB ${config.route} ETA error`, error);
-    return { etas: [], failed: true };
-  }
-}
-
-async function loadCitybusEtas(config) {
-  try {
-    const etaResp = await fetchWithTimeout(`${CTB_BASE}/eta/CTB/${encodeURIComponent(config.citybusStopId)}/${encodeURIComponent(config.route)}`, 8000);
-    if (!etaResp.ok) throw new Error(`ETA HTTP ${etaResp.status}`);
-    const etaData = (await etaResp.json()).data || [];
-    const etas = etaData
-      .filter((x) => x.eta && matchesCitybusDirection(x, config))
-      .map((x) => ({ ...x, source: 'CTB', etaDate: new Date(x.eta) }))
-      .filter(validFutureEta);
-    return { etas, failed: false };
-  } catch (error) {
-    console.warn(`Citybus ${config.route} ETA error`, error);
-    return { etas: [], failed: true };
-  }
-}
-
-function matchesCitybusDirection(item, config) {
-  if (item.dir && item.dir !== config.citybusBound) return false;
-  const destination = `${item.dest_tc || ''} ${item.dest_en || ''}`.trim().toUpperCase();
-  if (!destination) return true;
-  return destination.includes(config.citybusDestTc) || destination.includes(config.citybusDestEn);
-}
-
-function validFutureEta(item) { return !Number.isNaN(item.etaDate.getTime()) && item.etaDate.getTime() > Date.now() - 90_000; }
-function dedupeEtas(items) { const sorted = items.sort((a,b) => a.etaDate - b.etaDate); const result = []; for (const item of sorted) if (!result.some((x) => x.source === item.source && Math.abs(x.etaDate - item.etaDate) < 45_000)) result.push(item); return result; }
-function renderBusSkeleton() { document.getElementById('bus-list').innerHTML = activeRoutes().map((r) => `<div class="bus-row"><span class="route-badge">${r.route}</span><div class="route-destination"><strong>${r.dest}</strong><small>站：${r.stopCode}</small></div><span class="eta-none">載入中…</span></div>`).join(''); }
-function renderBusResults(results) { document.getElementById('bus-list').innerHTML = results.map((r) => { const eta = r.error ? '<span class="eta-none">未能更新</span>' : r.etas.length ? `<div class="eta-list">${r.etas.map((x) => `<span class="eta-pill"><span class="eta-operator ${x.source === 'CTB' ? 'ctb' : 'kmb'}">${x.source === 'CTB' ? '城巴' : '九巴'}</span>${formatETA(x.etaDate)}</span>`).join('')}</div>` : '<span class="eta-none">暫無班次</span>'; return `<div class="bus-row"><span class="route-badge">${r.route}</span><div class="route-destination"><strong>${r.dest}</strong><small>${r.jointCitybus ? '九巴＋城巴 · ' : '九巴 · '}站 ${r.stopCode}</small></div>${eta}</div>`; }).join(''); }
-function formatETA(date) { const mins = Math.max(0, Math.round((date.getTime() - Date.now()) / 60000)); return mins <= 1 ? '即將到站' : `${mins} 分鐘`; }
 function weatherEmoji(iconNo) { const n = Number(iconNo); if ([50,51].includes(n)) return '☀️'; if ([52,53].includes(n)) return '🌤️'; if ([54,55,56,57,58,59,60,61,62,63,64].includes(n)) return '☁️'; if ([65,66,67,68,69,70,71,72,73,74,75,76,77].includes(n)) return '🌧️'; if ([80,81,82].includes(n)) return '🌫️'; if ([90,91,92,93].includes(n)) return '🌙'; return '🌤️'; }
 
 function setPrivateButtonsEnabled(enabled) {

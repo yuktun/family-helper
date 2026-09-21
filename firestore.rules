@@ -53,6 +53,127 @@ service cloud.firestore {
           && request.resource.data.keys().hasOnly(['uid', 'email', 'displayName', 'photoURL', 'role', 'status', 'createdAt', 'updatedAt']);
 
         allow create, update, delete: if isAdmin(familyId);
+
+        // Transport choices are personal, location-adjacent data. Even family
+        // administrators may not access another member's preferences.
+        match /transport/{preferenceId} {
+          function isPreferenceOwner() {
+            return preferenceId == 'preferences'
+              && signedIn()
+              && request.auth.uid == uid
+              && isApproved(familyId);
+          }
+
+          function validTransportPreference(data) {
+            return data.keys().hasOnly(['schemaVersion', 'revision', 'interval', 'showOnHome', 'createdAt', 'updatedAt'])
+              && data.schemaVersion == 1
+              && data.revision is int
+              && data.revision > 0
+              && data.interval in [0, 15, 30, 60]
+              && data.showOnHome is bool
+              && data.createdAt is timestamp
+              && data.updatedAt is timestamp;
+          }
+
+          function validOrder(value) {
+            return value is int && value >= 0 && value < 36;
+          }
+
+          function validTransportText(value, max) {
+            return value is string && value.size() > 0 && value.size() <= max;
+          }
+
+          function validTransportDisplayText(value, max) {
+            return value is string && value.size() <= max;
+          }
+
+          function validRoute(item) {
+            return item is map
+              && item.keys().hasOnly(['id', 'operator', 'route', 'routeId', 'direction', 'serviceType', 'stopId', 'stopName', 'destination', 'order'])
+              && validTransportText(item.id, 120)
+              && item.operator in ['KMB', 'LWB', 'CTB', 'GMB']
+              && validTransportText(item.route, 20)
+              && (item.operator == 'GMB'
+                ? ('routeId' in item && validTransportText(item.routeId, 120))
+                : (!('routeId' in item) || item.routeId == ''))
+              && (item.operator == 'GMB' ? item.direction in ['1', '2'] : item.direction in ['I', 'O'])
+              && validTransportDisplayText(item.serviceType, 20)
+              && validTransportText(item.stopId, 120)
+              && validTransportDisplayText(item.stopName, 120)
+              && validTransportDisplayText(item.destination, 120)
+              && validOrder(item.order);
+          }
+
+          function validStop(item) {
+            return item is map
+              && item.keys().hasOnly(['id', 'operator', 'stopId', 'stopName', 'routes', 'order'])
+              && validTransportText(item.id, 120)
+              && item.operator in ['KMB', 'LWB', 'CTB', 'GMB']
+              && validTransportText(item.stopId, 120)
+              && validTransportDisplayText(item.stopName, 120)
+              && validRouteNames(item.routes)
+              && validOrder(item.order);
+          }
+
+          function validRouteNames(items) {
+            return items is list && items.size() <= 12
+              && (items.size() < 1 || validTransportText(items[0], 120))
+              && (items.size() < 2 || validTransportText(items[1], 120))
+              && (items.size() < 3 || validTransportText(items[2], 120))
+              && (items.size() < 4 || validTransportText(items[3], 120))
+              && (items.size() < 5 || validTransportText(items[4], 120))
+              && (items.size() < 6 || validTransportText(items[5], 120))
+              && (items.size() < 7 || validTransportText(items[6], 120))
+              && (items.size() < 8 || validTransportText(items[7], 120))
+              && (items.size() < 9 || validTransportText(items[8], 120))
+              && (items.size() < 10 || validTransportText(items[9], 120))
+              && (items.size() < 11 || validTransportText(items[10], 120))
+              && (items.size() < 12 || validTransportText(items[11], 120));
+          }
+
+          function validMtr(item) {
+            return item is map
+              && item.keys().hasOnly(['id', 'line', 'station', 'direction', 'destination', 'order'])
+              && validTransportText(item.id, 120)
+              && item.line in ['AEL', 'TCL', 'TML', 'TKL', 'EAL', 'SIL', 'TWL', 'ISL', 'KTL', 'DRL']
+              && validTransportText(item.station, 20)
+              && item.direction in ['UP', 'DOWN']
+              && validTransportDisplayText(item.destination, 120)
+              && validOrder(item.order);
+          }
+
+          allow read, delete: if isPreferenceOwner();
+          allow create: if isPreferenceOwner()
+            && validTransportPreference(request.resource.data)
+            && request.resource.data.createdAt == request.time
+            && request.resource.data.updatedAt == request.time;
+          allow update: if isPreferenceOwner()
+            && validTransportPreference(request.resource.data)
+            && request.resource.data.createdAt == resource.data.createdAt
+            && request.resource.data.revision == resource.data.revision + 1
+            && request.resource.data.updatedAt == request.time;
+
+          match /routes/{entryId} {
+            allow read, delete: if isPreferenceOwner();
+            allow create, update: if isPreferenceOwner()
+              && request.resource.data.id == entryId
+              && validRoute(request.resource.data);
+          }
+
+          match /stops/{entryId} {
+            allow read, delete: if isPreferenceOwner();
+            allow create, update: if isPreferenceOwner()
+              && request.resource.data.id == entryId
+              && validStop(request.resource.data);
+          }
+
+          match /mtr/{entryId} {
+            allow read, delete: if isPreferenceOwner();
+            allow create, update: if isPreferenceOwner()
+              && request.resource.data.id == entryId
+              && validMtr(request.resource.data);
+          }
+        }
       }
 
       match /membershipRequests/{uid} {

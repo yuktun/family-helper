@@ -13,7 +13,7 @@
   <link rel="icon" href="assets/icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="assets/icon-180.png" />
   <link rel="manifest" href="manifest.webmanifest" />
-  <link rel="stylesheet" href="styles.css?v=17" />
+  <link rel="stylesheet" href="styles.css?v=19" />
 </head>
 <body>
   <svg class="svg-sprite" aria-hidden="true">
@@ -71,22 +71,23 @@
         </div>
       </div>
 
-      <article class="card bus-card">
+      <article class="card bus-card" data-home-module="transport">
         <div class="card-heading">
           <div class="heading-with-icon">
             <span class="round-icon red"><svg><use href="#i-bus"></use></svg></span>
             <div>
-              <h2>巴士到站</h2>
-              <p>馬鞍山指定車站往市區</p>
+              <h2>我的交通</h2>
+              <p id="transport-home-subtitle">登入後顯示你的交通收藏</p>
             </div>
           </div>
           <button id="refresh-bus" class="icon-button" type="button" aria-label="更新巴士到站時間"><svg><use href="#i-refresh"></use></svg></button>
         </div>
         <div id="bus-list" class="bus-list" aria-live="polite"></div>
         <div class="bus-footer">
-          <span id="bus-updated">正在載入九巴資料…</span>
+          <span id="bus-updated">等待交通設定</span>
           <span id="bus-status-dot" class="status-dot loading"></span>
         </div>
+        <button id="open-transport" class="transport-open-button" type="button">查看完整交通資訊 <span aria-hidden="true">›</span></button>
       </article>
 
       <div class="summary-grid">
@@ -239,6 +240,43 @@
       <button id="add-expense-fab" class="fab expense-fab" type="button" aria-label="新增開支"><svg><use href="#i-plus"></use></svg></button>
     </section>
 
+    <section id="page-transport" class="page" data-page="transport">
+      <header class="page-header transport-header">
+        <div>
+          <p class="eyebrow">個人收藏 · 即時到站</p>
+          <h1>公共交通</h1>
+        </div>
+        <button id="refresh-transport" class="header-action transport-refresh" type="button"><svg><use href="#i-refresh"></use></svg><span>更新</span></button>
+      </header>
+      <div class="announcement-slot" data-announcement-slot></div>
+      <div class="transport-page-actions">
+        <button id="transport-back-home" class="text-button" type="button">‹ 返回首頁</button>
+        <button id="transport-open-settings" class="text-button" type="button">我的交通設定</button>
+      </div>
+      <div class="transport-tabs" role="tablist" aria-label="交通資訊模式">
+        <button class="active" type="button" data-transport-tab="mine" role="tab" aria-selected="true">我的交通</button>
+        <button type="button" data-transport-tab="nearby" role="tab" aria-selected="false">附近</button>
+      </div>
+      <section id="transport-mine-panel" class="transport-panel" data-transport-panel="mine">
+        <div id="transport-status" class="transport-status" role="status"></div>
+        <div id="transport-full-list" class="transport-full-list" aria-live="polite"></div>
+      </section>
+      <section id="transport-nearby-panel" class="transport-panel" data-transport-panel="nearby" hidden>
+        <article class="card nearby-card">
+          <div class="card-heading compact"><div><h2>附近交通</h2><p>只在你按下按鈕後使用目前位置；不會儲存位置或歷史。</p></div></div>
+          <div class="nearby-actions">
+            <button id="locate-nearby" class="primary-button" type="button">使用目前位置</button>
+            <button id="manual-nearby" class="secondary-button" type="button">搜尋參考車站</button>
+          </div>
+          <label id="nearby-search-label" class="transport-search" hidden>參考車站
+            <input id="nearby-search" type="search" placeholder="輸入車站名稱或 Stop ID" autocomplete="off" />
+          </label>
+          <div id="nearby-status" class="transport-status" role="status"></div>
+          <div id="nearby-results" class="transport-search-results"></div>
+        </article>
+      </section>
+    </section>
+
     <section id="page-settings" class="page" data-page="settings">
       <header class="page-header blue">
         <div>
@@ -263,12 +301,14 @@
         <div class="setting-list">
           <label><span><strong>提醒與續期</strong><small>顯示即將到期的重要事項</small></span><input type="checkbox" data-module-toggle="reminders" checked /></label>
           <label><span><strong>家庭筆記</strong><small>顯示最近的共享筆記</small></span><input type="checkbox" data-module-toggle="notes" checked /></label>
+          <label><span><strong>我的交通</strong><small>顯示個人交通收藏及到站時間</small></span><input type="checkbox" data-module-toggle="transport" checked /></label>
         </div>
       </article>
 
       <article class="card route-settings-card">
-        <div class="card-heading compact"><div><h2>首頁巴士路線</h2><p>選擇這部裝置要顯示及更新的路線。</p></div></div>
-        <div id="route-settings" class="setting-list route-setting-list"></div>
+        <div class="card-heading compact"><div><h2>我的交通設定</h2><p>每位家庭成員獨立同步路線、車站及港鐵收藏。</p></div></div>
+        <div id="transport-settings-summary" class="transport-settings-summary">登入並獲批准後即可設定。</div>
+        <button id="manage-transport" class="secondary-button transport-manage-button" type="button">管理我的交通</button>
       </article>
 
       <article id="announcement-admin-card" class="card announcement-admin-card" hidden>
@@ -325,6 +365,65 @@
       <button class="nav-item" type="button" data-nav="settings"><svg><use href="#i-settings"></use></svg><span>設定</span></button>
     </nav>
   </main>
+
+  <dialog id="transport-settings-dialog" class="app-dialog transport-dialog">
+    <div class="dialog-head"><div><p class="eyebrow blue-text">個人雲端設定</p><h2>我的交通設定</h2></div><button class="dialog-close" type="button" data-dialog-cancel aria-label="關閉">×</button></div>
+    <div id="transport-auth-gate" class="empty-state"></div>
+    <div id="transport-settings-content" hidden>
+      <div class="transport-preference-grid">
+        <label>自動更新
+          <select id="transport-interval"><option value="15">15 秒</option><option value="30">30 秒</option><option value="60">60 秒</option><option value="0">手動</option></select>
+        </label>
+        <label class="transport-home-switch"><span>在首頁顯示</span><input id="transport-show-home" type="checkbox" checked /></label>
+      </div>
+      <div id="transport-legacy-import" class="transport-import-note" hidden>
+        <strong>找到舊版首頁路線</strong><span>可由目前登入的帳戶明確接收；不會自動搬移其他人的設定。</span>
+        <button id="import-legacy-routes" class="secondary-button" type="button">匯入舊版路線</button>
+      </div>
+      <div class="transport-add-head"><h3>交通收藏</h3><button id="add-transport-favourite" class="primary-button" type="button">新增交通收藏</button></div>
+      <div id="transport-favourite-settings" class="transport-favourite-settings"></div>
+      <div class="personal-transport-io">
+        <button id="export-transport" class="secondary-button" type="button">匯出個人交通設定</button>
+        <label class="secondary-button file-button">匯入個人交通設定<input id="import-transport" type="file" accept="application/json" hidden /></label>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="transport-add-dialog" class="app-dialog transport-dialog">
+    <div class="dialog-head"><h2>新增交通收藏</h2><button class="dialog-close" type="button" data-dialog-cancel aria-label="關閉">×</button></div>
+    <div class="transport-mode-picker" role="tablist" aria-label="新增收藏方式">
+      <button class="active" type="button" data-add-mode="route">按路線加入</button>
+      <button type="button" data-add-mode="stop">按車站加入</button>
+      <button type="button" data-add-mode="mtr">港鐵</button>
+    </div>
+    <section data-add-panel="route">
+      <label>營辦商<select id="transport-route-operator"><option value="KMB">九巴／龍運</option><option value="CTB">城巴</option><option value="GMB">專線小巴</option></select></label>
+      <label>搜尋路線<input id="transport-route-query" type="search" placeholder="例如 89D、1A、69" autocomplete="off" /></label>
+      <div id="transport-route-results" class="transport-search-results"></div>
+      <div id="transport-route-stops" class="transport-search-results"></div>
+    </section>
+    <section data-add-panel="stop" hidden>
+      <label>營辦商<select id="transport-stop-operator"><option value="KMB">九巴／龍運</option><option value="CTB">城巴</option><option value="GMB">專線小巴</option></select></label>
+      <label>搜尋車站<input id="transport-stop-query" type="search" placeholder="車站名稱" autocomplete="off" /></label>
+      <div class="transport-id-row"><label>或直接輸入 Stop ID<input id="transport-stop-id" autocomplete="off" /></label><button id="transport-add-stop-id" class="secondary-button" type="button">加入</button></div>
+      <div id="transport-stop-results" class="transport-search-results"></div>
+    </section>
+    <section data-add-panel="mtr" hidden>
+      <label>搜尋車站<input id="transport-mtr-query" type="search" placeholder="例如 馬鞍山、MOS" autocomplete="off" /></label>
+      <label>路線<select id="transport-mtr-line"></select></label>
+      <label>車站<select id="transport-mtr-station"></select></label>
+      <label>方向<select id="transport-mtr-direction"><option value="UP">上行 UP</option><option value="DOWN">下行 DOWN</option></select></label>
+      <button id="transport-add-mtr" class="primary-button" type="button">加入港鐵收藏</button>
+    </section>
+    <div id="transport-add-status" class="transport-status" role="status"></div>
+  </dialog>
+
+  <dialog id="transport-stop-filter-dialog" class="app-dialog transport-dialog">
+    <div class="dialog-head"><h2>車站路線篩選</h2><button class="dialog-close" type="button" data-dialog-cancel aria-label="關閉">×</button></div>
+    <p class="dialog-note">未選任何路線時會顯示此站所有支援路線。</p>
+    <div id="transport-stop-filter-list" class="setting-list"></div>
+    <div class="dialog-actions"><button id="clear-stop-filter" class="secondary-button" type="button">顯示全部</button><button id="save-stop-filter" class="primary-button" type="button">儲存篩選</button></div>
+  </dialog>
 
   <dialog id="todo-dialog" class="app-dialog">
     <form id="todo-form" method="dialog">
@@ -412,6 +511,6 @@
   </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script type="module" src="app.js?v=18"></script>
+  <script type="module" src="app.js?v=19"></script>
 </body>
 </html>

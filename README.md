@@ -13,7 +13,8 @@
 - 新增續期及週期提醒，可設定每月或每年重複
 - 家庭行程支援每星期、每月及每年重複
 - 以應用程式確認視窗取代原生瀏覽器提示
-- 可在設定中選擇首頁模組及需要顯示的巴士路線
+- 每位已批准成員可在「設定 → 我的交通設定」獨立管理路線、車站及港鐵收藏
+- 首頁「我的交通」及完整交通頁共用同一組個人收藏，支援 15／30／60 秒或手動更新
 
 ## V2 主要更新
 
@@ -58,7 +59,11 @@ Web Firebase config 會出現在 frontend source，這是 Firebase Web App 正�
 
 ```text
 families/home/
-  members/{uid}
+  members/{uid}/
+    transport/preferences
+      routes/{favouriteId}
+      stops/{favouriteId}
+      mtr/{favouriteId}
   membershipRequests/{uid}
   announcements/{announcementId}
   todos/{todoId}
@@ -67,6 +72,10 @@ families/home/
   notes/{noteId}
   reminders/{reminderId}
 ```
+
+`transport/preferences` 只保存更新頻率、首頁顯示選項及同步 revision；每項收藏放在獨立子集合文件，讓 Firestore Rules 可完整驗證欄位。只有該位已批准成員可讀寫自己的交通設定；家庭管理員也不會自動取得其他成員的個人收藏。
+
+舊版首頁固定路線不會自動歸屬任何帳戶。使用者可在「我的交通設定」明確匯入，重複操作會按穩定識別碼去重。原 Netlify 網站的 LocalStorage 受瀏覽器同源政策限制，不能由 GitHub Pages 自動讀取；本 App 提供獨立的個人交通 JSON 匯出／匯入。
 
 ## 備份與還原
 
@@ -155,13 +164,17 @@ Firebase 環境核對、相容性限制及正式發布前資料審核方案見 `
 
 只有確認後才會加入 Firestore，並以 LocalStorage 記錄已完成 migration，避免重複匯入。
 
-## 公開 API
+## 公開交通 API
 
 - KMB/LWB ETA: `https://data.etabus.gov.hk/v1/transport/kmb/eta/{stop_id}/{route}/{service_type}`
-- Citybus joint-route supplement: `https://rt.data.gov.hk/v1/transport/citybus-nwfb/`
+- Citybus ETA: `https://rt.data.gov.hk/`
+- Green Minibus ETA: `https://data.etagmb.gov.hk/`
+- MTR Next Train: `https://rt.data.gov.hk/v1/transport/mtr/getSchedule.php`
 - 香港天文台 Current Weather API
 
 上述資料不需要私人 API key。
+
+交通功能由獲授權的原始單檔公共交通應用整合而成，保留其路線收藏、車站收藏、港鐵、附近搜尋及靜態 CTB／GMB 目錄設計；整合後使用 Family Helper 的登入、介面、設定及單一更新排程。
 
 ## 私隱
 

@@ -2,7 +2,7 @@ import test, { after, before, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
-import { Timestamp, deleteDoc, doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { Timestamp, deleteDoc, doc, getDoc, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 
 const projectId = 'demo-family-helpers';
 const familyId = 'fufai';
@@ -10,7 +10,21 @@ const now = Timestamp.fromDate(new Date('2026-08-27T00:00:00Z'));
 let env;
 
 const path = (collection, id) => `families/${familyId}/${collection}/${id}`;
+const transportPath = (uid, preferenceId = 'preferences') => `families/${familyId}/members/${uid}/transport/${preferenceId}`;
+const transportEntryPath = (uid, collection, id) => `${transportPath(uid)}/${collection}/${id}`;
 const auth = (uid, email = `${uid}@example.test`) => env.authenticatedContext(uid, { email }).firestore();
+const route = (overrides = {}) => ({ id: 'route-kmb-980x-o', operator: 'KMB', route: '980X', direction: 'O', serviceType: '1', stopId: '15FF958BE6921BAA', stopName: '耀安邨', destination: '灣仔', order: 0, ...overrides });
+const stop = (overrides = {}) => ({ id: 'stop-ctb-001950', operator: 'CTB', stopId: '001950', stopName: '海富中心', routes: ['680', '681'], order: 0, ...overrides });
+const mtr = (overrides = {}) => ({ id: 'mtr-tml-mos-up', line: 'TML', station: 'MOS', direction: 'UP', destination: '屯門', order: 0, ...overrides });
+const preference = (overrides = {}) => ({
+  schemaVersion: 1,
+  revision: 1,
+  interval: 30,
+  showOnHome: true,
+  createdAt: serverTimestamp(),
+  updatedAt: serverTimestamp(),
+  ...overrides,
+});
 
 const privateShapes = {
   todos: () => ({ title: '項目', category: 'todo', completed: false, createdBy: 'member', createdAt: now, updatedAt: now }),
@@ -26,6 +40,7 @@ async function seed() {
     const db = context.firestore();
     await setDoc(doc(db, path('members', 'admin')), { uid: 'admin', email: 'admin@example.test', role: 'admin', status: 'approved' });
     await setDoc(doc(db, path('members', 'member')), { uid: 'member', email: 'member@example.test', role: 'member', status: 'approved' });
+    await setDoc(doc(db, path('members', 'member2')), { uid: 'member2', email: 'member2@example.test', role: 'member', status: 'approved' });
     await setDoc(doc(db, path('members', 'pending')), { uid: 'pending', email: 'pending@example.test', role: 'member', status: 'pending' });
   });
 }
@@ -68,6 +83,98 @@ test('Firestore emulator: pending user cannot access private family data', async
   const db = auth('pending');
   await assertFails(getDoc(doc(db, path('todos', 't1'))));
   await assertFails(setDoc(doc(db, path('todos', 't1')), { title: 'x', category: 'todo', completed: false, createdBy: 'pending', createdAt: now, updatedAt: now }));
+});
+
+test('Firestore emulator: approved members own isolated transport preferences', async () => {
+  const memberDb = auth('member');
+  const adminDb = auth('admin');
+  const own = doc(memberDb, transportPath('member'));
+
+  await assertSucceeds(setDoc(own, preference()));
+  await assertSucceeds(setDoc(doc(memberDb, transportEntryPath('member', 'routes', 'route-kmb-980x-o')), route()));
+  await assertSucceeds(setDoc(doc(memberDb, transportEntryPath('member', 'routes', 'route-gmb-101m-1')), route({ id: 'route-gmb-101m-1', operator: 'GMB', route: '101M', routeId: '2000001', direction: '1', serviceType: '', stopId: 'gmb-stop-1', stopName: '馬鞍山市中心', destination: '坑口站', order: 1 })));
+  await assertSucceeds(setDoc(doc(memberDb, transportEntryPath('member', 'routes', 'route-lwb-a41-o')), route({ id: 'route-lwb-a41-o', operator: 'LWB', route: 'A41', direction: 'O', stopName: '', destination: '', order: 2 })));
+  await assertSucceeds(setDoc(doc(memberDb, transportEntryPath('member', 'stops', 'stop-ctb-001950')), stop()));
+  await assertSucceeds(setDoc(doc(memberDb, transportEntryPath('member', 'stops', 'stop-max-groups')), stop({ id: 'stop-max-groups', routes: Array.from({ length: 12 }, (_, index) => `group-${index}`), order: 11 })));
+  await assertSucceeds(setDoc(doc(memberDb, transportEntryPath('member', 'mtr', 'mtr-tml-mos-up')), mtr()));
+  await assertSucceeds(setDoc(doc(memberDb, transportEntryPath('member', 'mtr', 'mtr-isl-adm-down')), mtr({ id: 'mtr-isl-adm-down', line: 'ISL', station: 'ADM', direction: 'DOWN', destination: '堅尼地城', order: 1 })));
+  await assertSucceeds(setDoc(doc(memberDb, transportEntryPath('member', 'routes', 'route-order-35')), route({ id: 'route-order-35', order: 35 })));
+  await assertSucceeds(setDoc(doc(memberDb, transportEntryPath('member', 'stops', 'stop-order-35')), stop({ id: 'stop-order-35', order: 35 })));
+  await assertSucceeds(setDoc(doc(memberDb, transportEntryPath('member', 'mtr', 'mtr-order-35')), mtr({ id: 'mtr-order-35', order: 35 })));
+  const routeRef = doc(memberDb, transportEntryPath('member', 'routes', 'route-kmb-980x-o'));
+  await assertSucceeds(getDoc(routeRef));
+  await assertSucceeds(updateDoc(routeRef, { destination: '金鐘' }));
+  await assertSucceeds(getDoc(own));
+  await assertSucceeds(updateDoc(own, { revision: 2, interval: 60, showOnHome: false, updatedAt: serverTimestamp() }));
+
+  await assertFails(getDoc(doc(adminDb, transportPath('member'))));
+  await assertFails(updateDoc(doc(adminDb, transportPath('member')), { revision: 3, routes: [], updatedAt: serverTimestamp() }));
+  await assertFails(deleteDoc(doc(adminDb, transportPath('member'))));
+  await assertFails(getDoc(doc(adminDb, transportEntryPath('member', 'routes', 'route-kmb-980x-o'))));
+  await assertSucceeds(deleteDoc(own));
+});
+
+test('Firestore emulator: transport preferences deny non-owners and non-approved users', async () => {
+  await env.withSecurityRulesDisabled(async (context) => {
+    await setDoc(doc(context.firestore(), transportPath('member')), {
+      ...preference({ createdAt: now, updatedAt: now }),
+    });
+  });
+
+  for (const db of [
+    env.unauthenticatedContext().firestore(),
+    auth('requester'),
+    auth('pending'),
+    auth('member2'),
+  ]) {
+    const target = doc(db, transportPath('member'));
+    await assertFails(getDoc(target));
+    await assertFails(setDoc(target, preference()));
+    await assertFails(updateDoc(target, { revision: 2, routes: [], updatedAt: serverTimestamp() }));
+    await assertFails(deleteDoc(target));
+    const otherEntry = doc(db, transportEntryPath('member', 'routes', 'route-kmb-980x-o'));
+    await assertFails(getDoc(otherEntry));
+    await assertFails(setDoc(otherEntry, route()));
+    await assertFails(deleteDoc(otherEntry));
+  }
+});
+
+test('Firestore emulator: transport preference schema is exact and bounded', async () => {
+  const db = auth('member');
+  const target = doc(db, transportPath('member'));
+  const valid = preference();
+
+  await assertSucceeds(setDoc(target, valid));
+  await assertFails(setDoc(doc(db, transportPath('member', 'other')), valid));
+  await assertFails(setDoc(target, { ...valid, schemaVersion: 2 }));
+  await assertFails(setDoc(target, { ...valid, revision: 0 }));
+  await assertFails(setDoc(target, { ...valid, interval: 10 }));
+  await assertFails(setDoc(target, { ...valid, showOnHome: 'yes' }));
+  await assertFails(setDoc(target, { ...valid, routes: [] }));
+  await assertFails(setDoc(target, { ...valid, preciseLocation: 'home' }));
+  await assertFails(setDoc(target, { ...valid, createdAt: now, updatedAt: now }));
+  await assertFails(updateDoc(target, { revision: 3, updatedAt: serverTimestamp() }));
+  await assertFails(updateDoc(target, { revision: 2, createdAt: serverTimestamp(), updatedAt: serverTimestamp() }));
+});
+
+test('Firestore emulator: malformed nested transport entries are denied', async () => {
+  const db = auth('member');
+  const invalidRoutes = [
+    route({ operator: 'MTR' }), route({ operator: 'GMB' }), route({ routeId: 'unexpected' }),
+    route({ direction: 'UP' }), route({ destination: 'x'.repeat(121) }), route({ extra: true }), route({ order: 36 }),
+  ];
+  for (const value of invalidRoutes) {
+    await assertFails(setDoc(doc(db, transportEntryPath('member', 'routes', value.id)), value));
+  }
+  await assertFails(setDoc(doc(db, transportEntryPath('member', 'routes', 'wrong-id')), route()));
+  await assertFails(setDoc(doc(db, transportEntryPath('member', 'routes', 'route-gmb-invalid-direction')), route({ id: 'route-gmb-invalid-direction', operator: 'GMB', routeId: '2000001', direction: 'I' })));
+  await assertFails(setDoc(doc(db, transportEntryPath('member', 'stops', 'stop-ctb-001950')), stop({ operator: 'MTR' })));
+  await assertFails(setDoc(doc(db, transportEntryPath('member', 'stops', 'stop-ctb-001950')), stop({ routes: [''] })));
+  await assertFails(setDoc(doc(db, transportEntryPath('member', 'stops', 'stop-ctb-001950')), stop({ routes: Array.from({ length: 13 }, (_, index) => `group-${index}`) })));
+  await assertFails(setDoc(doc(db, transportEntryPath('member', 'stops', 'stop-ctb-001950')), stop({ order: 36 })));
+  await assertFails(setDoc(doc(db, transportEntryPath('member', 'mtr', 'mtr-tml-mos-up')), mtr({ line: 'XYZ' })));
+  await assertFails(setDoc(doc(db, transportEntryPath('member', 'mtr', 'mtr-tml-mos-up')), mtr({ direction: 'I' })));
+  await assertFails(setDoc(doc(db, transportEntryPath('member', 'mtr', 'mtr-tml-mos-up')), mtr({ order: 36 })));
 });
 
 test('Firestore emulator: private collection CRUD matrix preserves collaborative access', async () => {
